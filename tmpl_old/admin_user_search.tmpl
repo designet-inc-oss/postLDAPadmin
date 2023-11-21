@@ -1,0 +1,85 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title><<TITLE>></title>
+<<JAVASCRIPT>>
+<link rel="stylesheet" type="text/css" href="../../../postldapadmin.css">
+</head>
+<body topmargin="0" leftmargin="0">
+<div class="title">
+  <form method="post" action="../../../logout.php">
+    <<SK>>
+    <input type="submit" value="" name="logout" class="logout_btn">
+  </form>
+</div>
+<div class="topic"><<TOPIC>></div>
+<div class="message"><<MESSAGE>></div>
+<<TAB>>
+<div class="frame">
+  <form method="post" name="form_main" action="index.php">
+    <b>ユーザの検索</b><br><br>
+    <table class="normal">
+      <tr>
+        <td class="normal" style="text-align:right;">
+        ユーザ名
+        </td>
+        <td class="normal">
+        <input type="text" size="30" name="form_name" value="<<SEARCH_UID>>" maxlength="256">
+        <select name="name_match">
+        <option value="0" <<INCLUDE_ON>>>を含む</option>
+        <option value="1" <<MATCH_ON>>>と一致する</option>
+        </select>
+        </td>
+      </tr>
+    </table> <br>
+    <<SK>>
+    <input type="submit" name="search" value="" class="search_btn">
+    <input type="submit" name="csvdownload" value="" class="csv_btn">
+    <<HIDDEN>>
+    <br><br>
+    <table class="table">
+      <tr>
+        <td class="search_sum">[全 <<NUM>> 件]</td>
+        <td colspan="5" class="search_tmp" style="border:1px solid #000000;">
+        <table class="guide" align="right">
+          <tr>
+            <td class="search_prev"><<PRE>></td>
+            <td class="search_next"><<NEXT>></td>
+          </tr>
+        </table>
+        </td>
+      </tr>
+      <tr>
+        <td class="search_name">ユーザ名</td>
+        <td class="search_name">メールエイリアス</td>
+        <td class="search_trans">メール転送アドレス</td>
+        <td class="search_quota">メール容量</td>
+        <td class="search_ref"></td>
+<<FORWARD_START>>
+        <td class="search_quota">転送設定</td>
+<<FORWARD_END>>
+      </tr>
+<<STARTLOOP>>
+      <tr>
+        <td class="value"><<UID>></td>
+        <td class="value_alias"><<ALIAS>></td>
+        <td class="value_trans"><<TRANS>></td>
+        <td class="value_right"><<QUOTA>></td>
+        <td class="value_center"><<MOD>></td>
+<<FORWARD_START>>
+        <td class="value_forward"><<FORWARD>></td>
+<<FORWARD_END>>
+      </tr>
+<<ENDLOOP>>
+    </table>
+  </form>
+</div>
+<form method="post" name="common">
+  <<SK>>
+</form>
+<div class="footer"></div>
+</body>
+</html>

@@ -1,0 +1,227 @@
+# dglibpostldapadmin
+01001$ユーザ名が入力されていません。$Username is not inputted.
+01002$メールエイリアスがユーザ名と重複しています。$Mail alias is duplicated to username.
+01003$メールエイリアスの形式が不正です。$Invalid form of  mail alias.
+01004$メール転送アドレスの形式が不正です。$Invalid form of forwording mail address.
+01005$メールを残す/残さないの設定がされていません。$The rule of saving mail is not established.
+01006$メールを残す/残さないの値が不正です。$Invalid rule of saving mail.
+01007$メール転送アドレスがメールアドレスと重複しています。$Forwording mail address is duplicated to mail address.
+01008$メール転送アドレスがメールエイリアスと重複しています。$Forwording mail address is duplicated to mail alias.
+01009$メールエイリアスの形式が不正です。$Invalid form of mail alias.
+01010$パスワードが一致しません。$Password incorrect.
+01011$ユーザ名は既に使われています。$This username is already used.
+01012$メールエイリアスは既に使われています。$This mailalias is already used.
+01013$パスワードが設定されていません。$Password is not established.
+01014$メールディレクトリ削除コマンドの実行に失敗しました。$'%s' Command failed.
+01015$メールボックス容量の形式が不正です。$Invalid form of capacity of mailbox.
+01016$ユーザ名の形式が不正です。$Invalid form of username.
+01017$検索ユーザ名の形式が不正です。$Invalid form of  search user name.
+01018$メールアドレスの形式が不正です。$Invalid form of mail addres.
+01019$アップロードファイルを読み込むことができません。$Cannot read upload file.
+01020$空のファイルがアップロードされました。$Uploaded an empty file.
+01021$Searchuserbuttonの%s番目にセットされた値が不正です。$Invalid value setted on Searchuserbutton no.%s
+01022$メールアドレスが重複しています。(%s 行目）<BR>$Mail address is duplicated.(line %s)<BR>
+01023$$Delete a user in mailinglist'%s'.
+01024$メールフィルタオーダーの形式が不正です。$Invalid form of mail filter order.
+01025$メールフィルタアーティクルの形式が不正です。$Invalid form of mail filter article.
+# dglibmailfilter
+02001$メールフィルタの設定が存在しません$No establishment of mail filter.
+02002$不正なアクセスです$Invalid access.
+02003$入れ替え先のメールフィルタが存在しません$Swap mailfilter does not exist.
+02004$メールフィルタ設定が存在しません$Mail filter is not established.
+02005$メールフィルタルールのデコードに失敗しました。$Failed in decoding rule of mailfilter.
+02006$メールフィルタの優先順位情報のデコードに失敗しました。$Failed in decoding the priority of mailfilter.
+02007$split_str: Cannot find delimiter.$split_str: Cannot find delimiter.
+02008$split_str: Failed to get string.$split_str: Failed to get string.
+02009$フィルタ名が重複しています(フィルタ名: %s)$Duplicate filter name.(filter name :  %s)
+# dglibldap
+03001$ベースDNの値が不正です。$Invalid value of base DN.
+03002$フィルタの値が不正です。$Invalid value of the filter.
+03003$属性の形式が不正です。$Invalid form of attributhion.
+03004$指定されたエントリは見つかりませんでした。(dn:%s)$Cannot find designated entry.(dn:%s)
+03005$LDAP検索でエラーが発生しました。(dn:%s)$LDAP search error.(dn:%s)
+03006$LDAP検索でエラーが発生しました。(%s dn:%s)$LDAP search error.(%s dn:%s)
+03007$LDAP属性の削除に失敗しました。(dn:%s)$Failed to delete LDAP attribution.(dn:%s)
+03008$LDAP属性の削除に失敗しました。(%s dn:%s)$Failed to delete LDAP attribution.(%s dn:%s)
+03009$指定されたエントリはすでに存在しています。(dn:%s)$Desugbgnated  entry is already existing.(dn:%s)
+03010$指定された属性値はすでに存在しています。(dn:%s)$Designated attribution value is already existing.(dn:%s)
+03011$%sに失敗しました。(dn:%s)$Failed to %s.(dn:%s)
+03012$%sに失敗しました。(%s dn:%s)$Failed to %s.(%s dn:%s)
+03013$LDAPエントリの取得に失敗しました。(dn:%s)$Failed to get LDAP entry.(dn:%s)
+03014$LDAPエントリの取得に失敗しました。(%s dn:%s)$Failed to get LDAP entry.(%s dn:%s)
+03015$DNの取得に失敗しました。(dn:%s) $Cannot get DN.(dn:%s)
+03016$DNの取得に失敗しました。(%s dn:%s)$Cannot get DN.(%s dn:%s)
+03017$LDAP属性の取得に失敗しました。(dn:%s)$Failed to get LDAP attribution.(dn:%s)
+03018$LDAP属性の取得に失敗しました。(%s dn:%s)$Failed to get LDAP attribution.(%s dn:%s)
+03019$LDAPサーバに接続できませんでした。(%s:%s)<BR>$Cannot connect to LDAP server.(%s:%s)<BR>
+03020$LDAPのバージョン設定に失敗しました。(%s:%s)<BR>$Failed to designate LDAP version.(%s:%s)<BR>
+03021$LDAPサーバのバインドに失敗しました。(%s:%s)<BR>$Failed to bind LDAP server.(%s:%s)<BR>
+03022$LDAPサーバのバインドに失敗しました。(%s %s:%s)<BR>$Failed to bind LDAP server.(%s %s:%s)<BR>
+# dglibsess
+04001$ユーザ名もしくはパスワードが間違っています。$Incorrect user name or password.
+04002$暗号化キー%s$Encoding key %s
+04003$暗号化キーファイルがオープンできません。(%s)$Cannot open encoding keyword file. (%s)
+04004$暗号化キーファイルが正しくありません。(%s)$Encording keyword file is incorrect. (%s)
+04005$セッションが有効ではありません。$The session is Invalid.
+# admin/index.php
+05001$ユーザ名もしくはパスワードが間違っています。$Incorrect user name or password.
+05002$ユーザ名もしくはパスワードが不正です。$Incorrect user name or password.
+05003$セッションが無効です。$Invalid session.
+05004$アクセス方法が不当です。$Access forbidden.
+05005$LDAPサーバに接続することができません。$Cannot access to LDAP server.
+05006$$Logged in
+# user/index.php
+06001$設定情報を取得できません。$Cannot get management information.
+06002$ユーザ情報を取得できません。$Cannot get user information.
+06003$ユーザ名もしくはパスワードが間違っています。$Incorrect user name or password.
+06004$ユーザ名もしくはパスワードが正しくありません。$User name or password is not correct.
+06005$セッションが無効です。$Invalid session.
+06006$アクセス方法が不当です。$Access forbidden.
+06007$$Logged in
+# admin/postldapadmin/adminpass/index.php
+07001$パスワードが一致しません。$Password incorrect.
+07002$パスワードが変更前と一致します。$This password conforms to previous password.
+07003$管理者パスワードを更新しました。$Updated administrator password.
+# admin/postldapadmin/adminpass/mod/index.php
+08006$パスワードが一致しません。$Password incorrect.
+08007$パスワードが変更前と一致します。$This password conforms to previous password.
+08008$管理者パスワードを更新しました。$Updated administrator password.
+# admin/postldapadmin/ml/list/index.php
+09001$メールアドレスは既に使われています。$This mail address is already used.
+09002$メーリングリスト「%s」を作成しました。$Make mailing list '%s'.
+09003$指定されたメーリングリストアドレスは既に削除されています。$Designated mailing list address is already deleted.
+09004$メーリングリスト「%s」を削除しました。$Delete mailing list '%s'.
+09005$メーリングリストアドレスが入力されていません。$No mailing list address is inputted.
+09006$メーリングリストアドレスの形式が不正です。$Invalid form of mailing list address.
+09007$メーリングリストアドレスが選択されていません。$No mailing list is selected.
+09008$%s<BR>%s$%s<BR>%s
+# admin/postldapadmin/ml/list/mod.php
+10001$メーリングリストアドレスが指定されていません。$No mailing list is designated.
+10002$メールアドレスの形式が正しくありません。$Invalid form of mail address.
+10003$メールアドレスがメーリングリストアドレスと重複しています。$The mail address is duplicated to mailing list address.
+10004$既に存在しているアドレスが指定されています。(%s)$An existing address is designated.(%s)
+10005$アドレスを追加しました。(%s)$Add mail address.(%s)
+10006$アドレスを一括追加しました。$Add addresses at once.
+10007$既に削除されているアドレスが指定されています。(dn=%s)$An address already deleted is designated.(dn=%s)
+10008$メールアドレスを削除しました。$Delete mail address.
+10009$メールアドレスが選択されていません。$No mail address is selected.
+# admin/postldapadmin/ml/mod/index.php
+11001$メールアドレスは既に使われています。$This mail address is already used.
+11002$メーリングリスト「%s」を作成しました。$Make mailing list '%s'.
+11003$指定されたメーリングリストアドレスは既に削除されています。$Designated mailing list address is already deleted.
+11004$メーリングリスト「%s」を削除しました。$Delete mailing list '%s'.
+11005$メーリングリストアドレスが入力されていません。$No mailing list address is inputted.
+11006$メーリングリストアドレスの形式が不正です。$Invalid form of mailing list address.
+11007$メーリングリストアドレスが選択されていません。$No mailing list is selected.
+# admin/postldapadmin/ml/mod/mod.php
+12001$メーリングリストアドレスが指定されていません。$No mailing list is selected.
+12002$メールアドレスの形式が正しくありません。$Invalid form of mail address.
+12003$メールアドレスがメーリングリストアドレスと重複しています。$The mail address is duplicated to mailing list address.
+12004$既に存在しているメールアドレスが指定されています。(%s)$An existing mail address is designated.(%s)
+12005$メールアドレスを追加しました。(%s)$Add mail address.(%s)
+12006$既に存在しているメールアドレスが指定されています。$An existing address is designated.
+12007$メールアドレスを一括追加しました。$Add mail addresses at once.
+12008$既に削除されているメールアドレスが指定されています。(dn=%s)$An address already deleted is designated.(dn=%s)
+12009$メールアドレスを削除しました。(%s)$Delete mail address.(%s)
+12010$メールアドレスが選択されていません。$No mail address is selected.
+12011$$Delete user from mailing list '%s'.
+# admin/postldapadmin/user/add/index.php
+13001$ユーザを追加しました。(%s)$Add new user.(%s)
+# admin/postldapadmin/user/csv/result.php
+14001$指定されたユーザは既に登録されています。$Designated user is already registered.
+14002$指定されたメールエイリアスは既に登録されています。$Designated mail alias is already registered.
+14003$指定されたユーザは既に削除されています。$Designated user is already deleted.
+14004$メールボックス容量の形式が不正です。$Invalid form of capacity of mailbox.
+14005$登録が正常に終了しました。$Registration succeed.
+14006$変更が正常に終了しました。$Modification succeed.
+14007$ユーザ名の形式が不正です。$Invalid form of user name.
+14008$削除が正常に終了しました。$Deletion succeed.
+14009$列の数が不正です。$Invalid number of colmun.
+14010$空のファイルが指定されています。$Empty file is designated.
+14011$アップロードファイルが指定されていません。$Upload file is not designated.
+14012$アップロードファイルのオープンに失敗しました。$Failed to open upload file.
+14013$動作タイプが選択されていません。$Type is not selected.
+14014$登録チェックが正常に終了しました。$Registration check succeed.
+14015$変更チェックが正常に終了しました。$Modification check succeed.
+14016$削除チェックが正常に終了しました。$Deletion check succeed.
+# admin/postldapadmin/user/search/index.php
+15001$ユーザ名の形式が不正です。$Invalid form of user name.
+15002$ユーザ名の検索条件が不正です。$Invalid condition of user search.
+15003$ページの値が不正です。$Invalid value of page.
+15004$フィルタの形式が不正です。$Invalid form of filter.
+15005$指定されたユーザは見つかりませんでした。$Designated user is not found.
+15006$CSVファイルをダウンロードしました。$Downloaded CSV file.
+# admin/postldapadmin/user/search/mod.php
+16001$ページの値が不正です。$Invalid value of page.
+16002$フィルタの形式が不正です。$Invalid form of filter.
+16003$DNの形式が不正です。$Invalid form of DN.
+16004$指定されたユーザは既に削除されています。$Designated user is already deleted.
+16005$ユーザを更新しました。(%s)$Update user.(%s)
+16006$ユーザを削除しました。(%s)$Delete user.(%s)
+# user/postldapadmin/user/index.php
+21001$パスワードが一致しません。$Password incorrect.
+21002$メール転送アドレスの形式が不正です。$Invalid form of forwording mail address.
+21003$メールを残す/残さないの設定がされていません。$The rule of saving mail is not established.
+21004$メールを残す/残さないの値が不正です。$Invalid rule of saving mail.
+21005$メール転送アドレスがメールアドレスと重複しています。$Forwording mail address is duplicated to mail address.
+21006$メール転送アドレスがメールエイリアスと重複しています。$Forwording mail address is duplicated to mail alias.
+21007$ユーザを更新しました。$Update user.
+21008$ユーザ情報の取得に失敗しました。$Failed to get user information.
+# lib/dglibcommon
+22001$ファイルがオープンできません。(%s)$Cannot open file.(%s)
+22002$ファイルのロックに失敗しました。(%s)$Failed to lock file.(%s)
+22003$ファイルポインタの移動に失敗しました。(%s)$Failed to move filepointer.(%s)
+22004$コンポーネント名が重複しています。(%s : %s行目)$Duplicate component name.(%s : line %s)
+22005$%sが重複しています。(%s : %s行目)${%s} is duplicated.(%s : line %s)
+22006$[%s]の設定が存在しません。(%s)$Settings of [%s] do not exist.(%s)
+22007$項目%sが設定されていません。(%s)$%s is not setted.(%s)
+22008$SyslogFacilityが設定されていません。$SyslogFacility is not setted.
+22009$ファイルが存在しません。(%s)$The file does not exist.(%s)
+22010$指定されたファイルはディレクトリです。(%s)$Designated file is a directory.(%s)
+22011$ファイルに読み込み権がありません。(%s)$No read permission on the file.(%s)
+22012$ディレクトリに書込み権がありません。(%s)$No write permission on the directry.(%s)
+22013$SyslogFacilityが設定されていますが無効になります。$SyslogFacility become invalid Althogh SyslogFacility is setted.
+22014$SyslogFacilityが設定されていますが反映されません。$SyslogFacility is not reflected Althogh SyslogFacility is setted.
+22015$パスワードの形式が不正です。$Invalid form of password.
+22016$管理者名が入力されていません。$No administrator name is inputed.
+22017$管理者名の形式が不正です。$Invalid form of administrator name.
+22018$列の形式が不正です。(%s : %s行目)$Invalid form of column.(%s : line %s)
+22019$一時ファイルをオープンすることができません。(%s)$Cannot open temporary file.(%s)
+22020$一時ファイルへの書き込みに失敗しました。(%s)$Failed to write data on temporary file.(%s)
+22021$一時ファイルのリネームに失敗しました。(%s)$Failed to rename temporary file.(%s)
+22022$タブ管理ファイルの内容がありません。(%s)$No contents on tab management file.(%s)
+22023$タブ管理ファイルがオープンできません。(%s)$Cannot open tab management file.(%s)
+22024$タブ管理ファイルに不正な行が存在します。(%s : %s行目)$Invalid line on tab management file.(%s : line %s)
+22025$ページタイトルが長すぎます。(%s : %s行目)$Too long tilte of page.(%s : line %s)
+22026$タブ管理ファイルのタブが重複しています(%s : %s行目)$Duplicate tab exists on tab management file.(%s : line %s)
+22027$タブ管理ファイルにタブが存在しません。(%s)$No tab exists on tab management file.(%s)
+22028$「%s」メニューのタブがありません。(%s : %s行目)$[%s] menu tab does not exists on tab management file.(%s : line %s)
+22029$メッセージファイルがオープンできません。(%s)$Cannot open message file.(%s);
+22030$メッセージファイルの読み込みに失敗しました。(%s)$Failed to read message file.(%s);
+22031$メッセージファイルに不正な行が存在します。(%s : %s行目)$Invalid line on message file.(%s : line %s);
+22032$ファイルに書込み権がありません。$No write permission on the file.(%s)
+22033$ファイルに実行権がありません。$No execute permission on the file.(%s)
+# admin/logout.php
+23001$$Logged out
+# user/logout.php
+24001$$Logged out
+# user/forward/index.php
+25001$送信者条件の入力文字が上限を超えています。$
+25002$件名条件の入力文字が上限を超えています。$
+25003$宛先条件の入力文字が上限を超えています。$
+25004$メール転送アドレスの形式が不正です。$
+25005$メールフィルタアーティクルが不正です。$Invalid mail filter article.
+25006$登録許可件数の上限を超えています。$
+25007$フィルタ登録が成功しました。$Success add mail filter.
+# dgligdovecot
+26001$$Invalid filter rule.(%s,value:%s,enable:%s)
+26002$$Can't write dovecot sieve file.
+26003$$Failed to get tmp file path.
+26004$$Command is not found, or binary not available.(%s)
+26005$$An invalid argument was passed, or the command not available.(%s)
+26006$$Failed to create a backup copy of dovecot.sieve.(%s)
+26007$$Failed to create new dovecot.sieve file.(%s)
+26008$$Unable to create a dovecot.sieve due to file permissions.(%s)
+26009$$Failed to create temporary file.(%s)
+26010$$dovecot.sieve file restore failed.(%s)
+26011$sieveファイルの作成に失敗しました。$

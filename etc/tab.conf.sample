@@ -1,0 +1,7 @@
+postldapadmin/user:ユーザアカウント管理
+postldapadmin/user/add:ユーザアカウント追加
+postldapadmin/user/search:ユーザアカウント検索
+postldapadmin/user/csv:csv一括登録
+postldapadmin/ml:メーリングリスト管理
+postldapadmin/ml/mod:メーリングリスト編集
+postldapadmin/adminpass:管理者アカウント管理

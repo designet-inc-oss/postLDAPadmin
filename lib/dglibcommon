@@ -1,0 +1,1755 @@
+<?php
+
+/* 
+ * postLDAPadmin
+ *
+ * Copyright (C) 2006,2007 DesigNET, INC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
+/*********************************************************
+ * 共通関数ライブラリ
+ *
+ * $Source$
+ * $Revision$
+ * $Date$
+ *
+ *********************************************************/
+
+/* 設定ファイル設置ディレクトリ */
+define("ETCDIR", "etc/");
+
+/* 設定ファイル名 */
+define("WEBCONF", "web.conf");
+
+/* syslog出力用 */
+define("IDENT", "postLDAPadmin");
+
+/* タブ管理ファイル名 */
+define("ADMINTABCONF", "tab.conf");
+define("USERTABCONF", "user_tab.conf");
+
+/* メッセージファイル名 */
+define("MESSAGEFILE", "msg_file");
+
+/* 全メッセージを格納した連想配列のキー */
+define("SCREEN_MSG", "screen");
+define("LOG_MSG", "log");
+
+/* タブファイルの一行の最大文字数 */
+define("MAX_TAB_LINE", 1024);
+
+/* 最大ページタイトル */
+define("MAX_PAGETITLE_LENGTH", 32);
+
+/* 暗号化キーファイル名 */
+define("ADMKEY", "admin.key");
+
+/* 最大セッションタイムアウト時間(24時間) */
+define("MAX_SESSTIME", 86400);
+
+/* 最大管理者名 */
+define("MAXADMINNAME", 16);
+
+/* 最大管理者パスワード */
+define("MAXADMINPASSWD", 512);
+
+/* 最小管理者パスワード */
+define("MINADMINPASSWD", 0);
+
+/* コンポーネント読込モード */
+define("SEARCH", 0);
+define("READ", 1);
+
+/* フラグの状態を定義 ON:0 OFF:1*/
+define("ON", "0");
+define("OFF", "1");
+
+/* 文字列syslog判定 */
+define("SYSLOG", 'syslog');
+
+/* ファシリティの値 */
+$facilitynames = array(
+                       "auth"     => LOG_AUTH,
+                       "authpriv" => LOG_AUTHPRIV,
+                       "cron"     => LOG_CRON,
+                       "daemon"   => LOG_DAEMON,
+                       "kern"     => LOG_KERN,
+                       "lpr"      => LOG_LPR,
+                       "mail"     => LOG_MAIL,
+                       "news"     => LOG_NEWS,
+                       "syslog"   => LOG_SYSLOG,
+                       "user"     => LOG_USER,
+                       "uucp"     => LOG_UUCP,
+                       "local0"   => LOG_LOCAL0,
+                       "local1"   => LOG_LOCAL1,
+                       "local2"   => LOG_LOCAL2,
+                       "local3"   => LOG_LOCAL3,
+                       "local4"   => LOG_LOCAL4,
+                       "local5"   => LOG_LOCAL5,
+                       "local6"   => LOG_LOCAL6,
+                       "local7"   => LOG_LOCAL7);
+
+/* 設定ファイル項目 */
+$conf_keys["global"] = array(
+                    "titlename"         => "no_check",
+                    "referrerurl"       => "no_check",
+                    "adminname"         => "no_check",
+                    "adminpasswd"       => "no_check",
+                    "sessiontimeout"    => "check_sess",
+                    "logfile"           => "check_logfile",
+                    "syslogfacility"    => "check_syslog",
+                    "maxpasswordlength" => "is_positive_number",
+                    "minpasswordlength" => "is_integer_number",
+                    "passwordencrypt"   => "check_encrypt_type",
+                    "webauthmode"       => "check_boolean",
+                    "webauthmakeuser"   => "check_boolean",
+                    "webauthusername"   => "no_check",
+                    "logoutredirecturl" => "no_check");
+
+/* 設定のデフォルト値 */
+$conf_def["global"] = array(
+                  "sessiontimeout"    => "900",
+                  "syslogfacility"    => "local1",
+                  "maxpasswordlength" => "8",
+                  "minpasswordlength" => "3",
+                  "passwordencrypt"   => "CRYPT",
+                  "webauthmode"       => "0",
+                  "webauthmakeuser"   => "0",
+                  "webauthusername"   => "OIDC_CLAIM_preferred_username",
+                  "logoutredirecturl" => "index.php");
+
+$pass_enc["CRYPT"]["name"] = "CRYPT";
+$pass_enc["CRYPT"]["schema"] = "{CRYPT}";
+$pass_enc["CRYPT"]["make_func"] = "my_crypt";
+$pass_enc["MD5"]["name"] = "MD5";
+$pass_enc["MD5"]["schema"] = "{MD5}";
+$pass_enc["MD5"]["make_func"] = "my_md5";
+
+/*********************************************************
+ * escape_html()
+ *
+ * Adaptation to noncompatible deviation of htmlspecialchars() from PHP 5.3 to PHP5.4
+ *
+ * [return value]
+ *       HTML escaped string of $str
+ **********************************************************/
+function escape_html($str, $flags=ENT_COMPAT, $encoding = "EUC-JP") 
+{
+    return htmlspecialchars($str, $flags, $encoding);
+}
+
+/*********************************************************
+ * read_web_conf()
+ *
+ * 設定ファイルを読み込み、設定情報を連想配列 $web_conf に格納
+ *
+ * [引数]
+ *       $cmp          読み込みたいコンポーネント名 
+ * [返り値]
+ *       TRUE          正常
+ *       FALSE         異常
+ **********************************************************/
+function read_web_conf($cmp)
+{
+    global $domain;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $conf_keys;
+    global $conf_def;
+    global $web_conf;
+    global $tab_conf;
+    global $basedir;
+
+    $cmp_name[0] = 'global';
+    $mode = SEARCH;
+    $web_conf["$cmp_name[0]"] = array();
+
+    if (isset($cmp) && $cmp != "") {
+        /* $conf_keysが設定されていたらセットする */
+        if (array_key_exists($cmp, $conf_keys) === TRUE) {
+            $cmp_name[1] = $cmp;
+        }
+    }
+    /* ドメインの設定ファイルを定義 */
+    $webconf_file = $basedir .  ETCDIR . $domain . '/' . WEBCONF;
+
+    /* ファイルの読み込み権チェック */
+    if (is_readable_file($webconf_file) === FALSE) {
+        $err_msg = escape_html($err_msg);
+        return FALSE;
+    }
+
+    /* ファイルをオープン */
+    $fp = fopen($webconf_file, "r");
+    if ($fp === FALSE) {
+        $err_msg = "ファイルがオープンできません。(" .
+                   escape_html($webconf_file) . ")";
+        $log_msg = "Cannot open file.(" . escape_html($webconf_file) . ")";
+        return FALSE;
+    }
+
+    /* ファイルをロック */
+    $ret = flock($fp, LOCK_EX);
+    if ($ret === FALSE) {
+        $err_msg = "ファイルのロックに失敗しました。(" .
+                   escape_html($webconf_file) . ")";
+        $log_msg = "Failed to lock file.(" . escape_html($webconf_file) . ")";
+        fclose($fp);
+        return FALSE;
+    }
+
+    /* $cmp_name初期値 */
+    $i = 0;
+
+    /* コンポーネント名がある間ループ */
+    while (isset($cmp_name["$i"]) && $cmp_name["$i"] != "") {
+        /* ファイルポインタを先頭へ移動 */
+        $ret = fseek($fp, 0);
+        if ($ret == -1) {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            $err_msg = "ファイルポインタの移動に失敗しました。(" .
+                       escape_html($webconf_file) . ")";
+            $log_msg = "Failed to move filepointer.(" .
+                       escape_html($webconf_file) . ")";
+            return FALSE;
+        }
+
+        /* 行の初期値 */
+        $line = 0;
+
+        /* コンポーネント毎にループしてファイル読み込み */
+        while (feof($fp) === FALSE) {
+            /* 一行分をバッファに格納 */
+            $buf = fgets($fp);
+            if ($buf === FALSE) {
+                break;
+            }
+            /* 行末の空白と改行を削除 */
+            $buf = rtrim($buf);
+            $line++;
+
+            /* 行の頭が#のコメント行であれば無視 */
+             if (substr($buf, 0, 1) == "#") {
+                continue;
+            }
+            /* 空行であれば無視 */
+            if (strlen($buf) == 0) {
+                continue;
+            }
+            /* コンポーネント名かどうか */
+            if ($buf == '[' . $cmp_name[$i] . ']') {
+                /* 探している時か、読んでいる時か */
+                if ($mode == SEARCH) {
+                    /* 探している時だったら読みモードにして次の行を読む */
+                    $mode = READ;
+                    continue;
+                }
+                /* コンポーネント名重複エラー */
+                $err_msg = "コンポーネント名が重複しています。(" .
+                           escape_html($webconf_file) . ": {$line}行目)";
+                $log_msg = "Duplicate component name.(" .
+                           escape_html($webconf_file) . ": line {$line})";
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                return FALSE;
+                
+            }
+            /* コンポーネント名検索中で[以外の時 */
+            if ($mode == SEARCH) {
+                continue;
+            }
+            /* READ中に次のコンポーネント名を発見 */
+            if (strstr($buf, '[')) {
+                break;
+            }
+
+            /* 行の始めの区切り文字で分割 */
+            $data = explode("=", $buf, 2);
+
+            /* 値がnull,パラメータの先頭が空白であれば、エラー */
+            if (($data[0] == "") || ($data[1] == "") ||
+                                     substr("$data[1]", 0, 1) == " ") {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                set_error($webconf_file, $line);
+                return FALSE;
+            }
+
+            /* 項目名を小文字化して格納 */
+            $key = strtolower($data[0]);
+            /* 定義された項目かのチェック */
+            if(is_null($conf_keys["$cmp_name[$i]"][$key]) === TRUE) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                set_error($webconf_file, $line);
+                return FALSE;
+            }
+
+            /* 定義した検査項目によるチェック */
+            if ($conf_keys[$cmp_name[$i]][$key]($data[1]) === FALSE) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                set_error($webconf_file, $line);
+                return FALSE;
+            }
+
+            /* 重複チェック */
+            if (isset($web_conf["$cmp_name[$i]"][$key]) === TRUE) {
+                $err_msg = "{$key}が重複しています。(" .
+                escape_html($webconf_file) . ": {$line}行目)";
+                $log_msg = "{$key} is duplicated.(" .
+                escape_html($webconf_file) . ": line {$line})";
+                flock ($fp, LOCK_UN);
+                fclose($fp);
+                return FALSE;
+            }
+
+            /* ldap検索スコープを置き換え */ 
+            if ($key == "ldapscope") {
+                $data[1] = set_ldapscope($data[1]);
+            }
+
+            /* 値を格納する */
+            $web_conf["$cmp_name[$i]"][$key] = $data[1];
+        }
+        /* コンポーネント名が一致しなかったらエラー */
+        if ($mode == SEARCH && is_null($web_conf["$cmp_name[$i]"])) {
+            $err_msg = "[" . $cmp_name[$i] . "]の設定が存在しません。(" .
+                       escape_html($webconf_file) . ")";
+            $log_msg = "Settings of [" . $cmp_name[$i] . "] do not exist.(" .
+                       escape_html($webconf_file) . ")";
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            return FALSE;
+        }
+
+        /* 項目名を取得 */
+        $keys = array_keys($conf_keys["$cmp_name[$i]"]);
+
+        /* すべての項目に値がセットされているかの確認 */
+        foreach ($keys as $key) {
+            /* セットされておらず、デフォルト値が設定されている場合、それを代入 */
+            if (!isset($web_conf["$cmp_name[$i]"][$key]) && 
+                 isset($conf_def["$cmp_name[$i]"][$key])) {
+                $web_conf["$cmp_name[$i]"][$key] = $conf_def["$cmp_name[$i]"][$key];
+            }
+            if (!isset($web_conf["$cmp_name[$i]"][$key]) === TRUE) {
+                $err_msg = "項目" . $key . "が設定されていません。(" .
+                           escape_html($webconf_file) . ")";
+                $log_msg = $key . " is not setted.(" .
+                           escape_html($webconf_file) . ")";
+                return FALSE;
+            }
+        }
+        $i++;
+        $mode = SEARCH;
+    }
+
+    /*check valid maxpasswordlength and minpasswordlength */
+    if($web_conf["global"]["minpasswordlength"] > $web_conf["global"]["maxpasswordlength"]) {
+        $err_msg = "MaxPasswordLengthもしくはMinPasswordLengthの値がが不正です。(" . 
+                   escape_html($webconf_file) . ")";
+        $log_msg = "Invalid value of MaxPasswordLength or MinPasswordLength.(" .
+                   escape_html($webconf_file) . ")";
+        return FALSE;
+    }
+
+    /* syslogがweb.confに設定されず、logfileにsyslogとかかれていた場合 */
+    if ($web_conf["global"]["logfile"] == SYSLOG && 
+        $web_conf["global"]["syslogfacility"] == "") {
+        $err_msg = "SyslogFacilityが設定されていません。";
+        $log_msg = "SyslogFacility is not setted.";
+        return FALSE;
+    }
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return TRUE;
+}
+
+
+/*********************************************************
+ * make_msgarr()
+ *
+ * メッセージファイルを連想配列 $msgarr に読み込む関数
+ *
+ * [引数]
+ *       $prefix     メッセージファイル名のプレフィックス
+ * [返り値]
+ *       正常時：TRUE
+ *       異常時：FALSE
+ **********************************************************/
+function make_msgarr($prefix)
+{
+    global $domain;
+    global $basedir;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    $list = glob($basedir . ETCDIR . $domain . "/" . $prefix. "*");
+    if ($list === False || count($list) == 0) {
+        $err_msg = "メッセージファイルが見つかりません(" .
+                   escape_html($prefix) . "*)";
+        $log_msg = "Cannot open dir .(" .
+                   escape_html($prefix) . "*)";
+        result_log($log_msg);
+        return FALSE;
+    }
+
+    $msgarr = array();
+    foreach ($list as $msgfile) {
+        /* ファイルの読み込み権チェック */
+        if (is_readable_file($msgfile) === FALSE) {
+            $err_msg = escape_html($err_msg);
+            result_log($log_msg);
+            return FALSE;
+        }
+    
+        /* ファイルをオープン */
+        $fp = fopen($msgfile, 'r');
+        if ($fp === FALSE) {
+            $err_msg = "メッセージファイルがオープンできません。(" .
+                       escape_html($msgfile) . ")";
+            $log_msg = "Cannot open message file.(" .
+                       escape_html($msgfile) . ")";
+            result_log($log_msg);
+            return FALSE;
+        }
+    
+    
+        /* 終端まで一行ずつ読み込み */
+        for ($i = 1; TRUE; $i++) {
+    
+            $line = fgets($fp);
+    
+            /* 改行コードや末尾の空白を取り除く */
+            $line = rtrim($line);
+    
+            /* ファイル終端に達した */
+            if (feof($fp)) {
+                break;
+            /* fgets()に失敗した */
+            } else if ($line === FALSE) {
+                $err_msg = "メッセージファイルの読み込みに失敗しました。(" .
+                           escape_html($msgfile) . ")";
+                $log_msg = "Failed to read message file.(" .
+                           escape_html($msgfile) . ")";
+                result_log($log_msg);
+                fclose($fp);
+                return FALSE;
+            /* 空行,#から始まる行は無視 */
+            } else if ($line == "" || substr($line, 0, 1) == "#") {
+                continue;
+            }
+    
+            /* 区切り文字で行を分割する */
+            $tmparr = explode('$', $line);
+            if (count($tmparr) !== 3) {
+                $err_msg = "メッセージファイルの中に形式が不正な行があります。(" .
+                           $msgfile . ":" . $i . "行目)";
+                $log_msg = "Invalid form of line on message file.(" .
+                           $msgfile . ": line " . $i . ")";
+                result_log($log_msg);
+                fclose($fp);
+                return FALSE;
+            }
+    
+            /* 先頭数字チェック(5桁の数字) */
+            if (strlen($tmparr[0]) != 5 || is_num_check($tmparr[0]) === FALSE) {
+                $err_msg = "メッセージファイルの中に識別番号が不正な行があります。(" .
+                           $msgfile . ":" . $i . "行目)";
+                $log_msg = "Invalid serial number on message file.(" .
+                           $msgfile . ": line " . $i . ")";
+                result_log($log_msg);
+                fclose($fp);
+                return FALSE;
+            }
+    
+            /* 画面出力,ログ出力のメッセージが両方入っていない */
+            if ($tmparr[1] == "" && $tmparr[2] == "") {
+                $err_msg = "メッセージファイルの中にメッセージが空の行があります。(" .
+                           $msgfile . ":" . $i . "行目)";
+                $log_msg = "Empty message line on message file.(" .
+                           $msgfile . ": line " . $i . ")";
+                result_log($log_msg);
+                fclose($fp);
+                return FALSE;
+            }
+    
+            /* 識別番号が重複した行がある */
+            if (isset($msgarr[$tmparr[0]])) {
+                $err_msg = "メッセージファイルの中に識別番号が重複した行があります。(" .
+                           $msgfile . ":" . $i . "行目)";
+                $log_msg = "Duplicate serial number on message file.(" .
+                           $msgfile . ": line " . $i . ")";
+                result_log($log_msg);
+                fclose($fp);
+                return FALSE;
+            }
+    
+            /* 配列に格納 */
+            $msgarr[$tmparr[0]][SCREEN_MSG] = $tmparr[1];
+            $msgarr[$tmparr[0]][LOG_MSG] = $tmparr[2];
+        }
+    
+        /* ファイルをクローズ */
+        fclose($fp);
+    }
+
+    return TRUE;
+}
+
+
+/*********************************************************
+ * is_readable_file()
+ * ファイルの読み込み権をチェックする
+ *
+ * [引数]
+ *      $filename    チェック対象ファイル
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function is_readable_file($filename)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* STAT情報のキャッシュクリア */
+    clearstatcache();
+
+    /* 存在のチェック */
+    if (file_exists($filename) === FALSE) {
+        $err_msg = "ファイルが存在しません。($filename)";
+        $log_msg = "The file does not exist.($filename)";
+        return FALSE;
+    }
+
+    /* ディレクトリかのチェック */
+    if (is_dir($filename) === TRUE) {
+        $err_msg = "指定されたファイルはディレクトリです。($filename)";
+        $log_msg = "Designated file is a directory.($filename)";
+        return FALSE;
+    }
+
+    /*  ファイルの読み込み権チェック */
+    if (is_readable($filename) === FALSE) {
+        $err_msg = "ファイルに読み込み権がありません。($filename)";
+        $log_msg = "No read permission on the file.($filename)";
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/***********************************************************
+ * is_writable_file()
+ *
+ * ファイルの書込み権チェック
+ *
+ * [引数]
+ *      $filename       チェック対象ファイル
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ ************************************************************/
+function is_writable_file($filename)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* STAT情報のキャッシュクリア */
+    clearstatcache();
+
+    /* 存在チェック */
+    if (file_exists($filename) === FALSE) {
+        if (is_writable(dirname($filename)) === FALSE) {
+            $err_msg = sprintf($msgarr['22012'][SCREEN_MSG], $filename);
+            $log_msg = sprintf($msgarr['22012'][LOG_MSG], $filename);
+            return FALSE;
+        }
+        return TRUE;
+    }
+
+    /*  ディレクトリチェック */
+    if (is_dir($filename) === TRUE) {
+        $err_msg = sprintf($msgarr['22010'][SCREEN_MSG], $filename);
+        $log_msg = sprintf($msgarr['22010'][LOG_MSG], $filename);
+        return FALSE;
+    }
+
+    /*  ファイルの書込み権チェック */
+    if (is_writable($filename) === FALSE) {
+        $err_msg = sprintf($msgarr['22032'][SCREEN_MSG], $filename);
+        $log_msg = sprintf($msgarr['22032'][LOG_MSG], $filename);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * no_check()
+ *
+ * ダミー関数
+ *
+ * [引数]
+ *       なし
+ * [返り値]
+ *       TRUE            正常
+ **********************************************************/
+function no_check()
+{
+    return TRUE;
+}
+
+/*********************************************************
+ * check_sess()
+ *
+ * セッションタイムアウト時間チェック関数
+ *
+ * [引数]
+ *       $sess           セッションタイムアウト時間 
+ * [返り値]
+ *       TRUE            正常
+ *       FALSE           異常
+ **********************************************************/
+function check_sess($sess)
+{
+    /* 半角数字のみ許可 */
+    $num = "0123456789";
+    if (strspn($sess, $num) != strlen($sess)) {
+        return FALSE;
+    }
+
+    /* 1秒〜24時間までならOK */
+    if ($sess < 1 || $sess > MAX_SESSTIME){ 
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_logfile()
+ *
+ * ログのチェック 
+ *
+ * [引数]
+ *      $logfile        ログファイル 
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_logfile($logfile)
+{
+    global $web_conf;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* $web_confにsyslogの値があるかを調べる */
+    if (isset($web_conf["global"]["syslogfacility"])) {
+
+        /* logfileにもsyslogにも設定があった場合 */
+        if ($logfile != SYSLOG && 
+            $web_conf["global"]["syslogfacility"] != "") {
+            /* syslogでなければエラーを格納してTRUE */
+            $err_msg = "SyslogFacilityが設定されていますが無効になります。"; 
+            $log_msg = "SyslogFacility become invalid Althogh SyslogFacility is setted.";
+            return TRUE;
+        }
+    }
+
+    /* web_confにsyslogがなかったらTRUE */
+    return TRUE;
+}
+
+/*********************************************************
+ * check_syslog()
+ *
+ * ログのチェック 
+ *
+ * [引数]
+ *      $syslog         シスログファシリティ 
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_syslog($syslog)
+{
+    global $web_conf;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $facilitynames;
+
+    /* $web_confにlogfileの値があるかを調べる */
+    /* また、syslogにも値があるかを調べる */
+    if (isset($web_conf["global"]["logfile"]) && isset($syslog)) {
+
+        /* 定義された項目かのチェック */
+        if(is_null($facilitynames[$syslog]) === TRUE) {
+            return FALSE;
+        }
+
+        /* logfileの値がsyslogか調べる */
+        if ($web_conf["global"]["logfile"] == SYSLOG) {
+            /* syslogだったらTRUE */
+            return TRUE;
+        }
+        /* logfileにもsyslogにも設定があった場合 */
+        if ($web_conf["global"]["logfile"] != SYSLOG) {
+            /* syslogに値があったらエラーを格納してTRUE */
+            $err_msg = "SyslogFacilityが設定されていますが反映されません。"; 
+            $log_msg = "SyslogFacility is not reflected Althogh SyslogFacility is setted.";
+            return TRUE;
+        }
+    }            
+    /* $web_confにlogfileの値がなかったらTRUE */
+    /* またはsyslogに値がなかったらTRUE */
+    return TRUE;
+}
+
+/*********************************************************
+ * check_passwd()
+ *
+ * パスワードチェック
+ *
+ * [引数]
+ *      $passwd      パスワード
+ *      $minlen      最小入力文字数
+ *      $maxlen      最大入力文字数
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_passwd($passwd, $minlen, $maxlen)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 文字数チェック */
+    $letters = strlen($passwd);
+    if ($letters < $minlen || $letters > $maxlen) {
+        $err_msg = "パスワードの形式が不正です。";
+        $log_msg = "Invalid form of password.";
+        return FALSE;
+    }
+
+    /* 半角英大小文字、数字、特定記号のみ許可 */
+    $num = "0123456789";
+    $sl = "abcdefghijklmnopqrstuvwxyz";
+    $ll = strtoupper($sl);
+    $sym = "!\"#$%&'()=-~^|@`[{;+:*]},<.>\/?_";
+    $allow_letter = $num . $sl . $ll . $sym;
+    if (strspn($passwd, $allow_letter) != $letters) {
+        $err_msg = "パスワードの形式が不正です。";
+        $log_msg = "Invalid form of password.";
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_admin_uname()
+ *
+ * 管理者名チェック
+ *
+ * [引数]
+ *      $admin_name 入力された管理者名
+ *      $maxlen     最大入力文字数
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_admin_uname($admin_name, $maxlen)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    if ($admin_name == "") {
+        $err_msg = "管理者名が入力されていません。";
+        $log_msg = "No administrator name is inputed.";
+        return FALSE;
+    }
+
+    $letters = strlen($admin_name);
+    if ($letters > $maxlen) {
+        $err_msg = "管理者名の形式が不正です。";
+        $log_msg = "Invalid form of administrator name.";
+        return FALSE;
+    }
+
+    /* 半角英小文字、数字、記号[-_]のみ許可 */
+    /* 先頭は数字または半角英文字 */
+    $num = "0123456789";
+    $sl = "abcdefghijklmnopqrstuvwxyz";
+    $sym = "-_";
+    $allow_letter = $num . $sl . $sym;
+
+    if (strspn($admin_name, $allow_letter) != $letters) {
+        $err_msg = "管理者名の形式が不正です。";
+        $log_msg = "Invalid form of administrator name.";
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/***********************************************************
+ * check_flg()
+ *
+ * 値がONかOFFのいづれかであることをチェックする
+ *
+ * [引数]
+ *      $flg         フラグの値
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_flg ($flg)
+{
+    if ($flg != ON && $flg != OFF) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * set_error()
+ *
+ * 設定ファイル読み込み時のエラーメッセージをセットする。
+ *
+ * [引数]
+ *      $filename       設定情報が格納されたファイル
+ *      $line           不正なデータが見つかった行
+ * [返り値]
+ *      なし
+ **********************************************************/
+function set_error($filename, $line)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    $err_msg = "列の形式が不正です。 (" .
+               escape_html($filename) . " : {$line}行目)";
+    $log_msg = "Invalid form of column.(" .
+               escape_html($filename) . " : {$line}行目)";
+}
+
+/***********************************************************
+ * my_md5()
+ *
+ * MD5でパスワードを暗号化する
+ *
+ * [引数]
+ *       $passwd           パスワード
+ * [返り値]                暗号化されたパスワード
+ ************************************************************/
+function my_md5($passwd)
+{
+    return base64_encode(md5($passwd, TRUE));
+}
+
+/***********************************************************
+ * my_crypt()
+ *
+ * パスワードを暗号化する
+ *
+ * [引数]
+ *       $passwd           パスワード
+ * [返り値]
+ *       $crypt_passwd     暗号化されたパスワード
+ ************************************************************/
+function my_crypt($passwd)
+{
+    $salts = array("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
+                   "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X",
+                   "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+                   "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+                   "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7",
+                   "8", "9", ".", "/" );
+
+    $rand_key = array_rand($salts, 2);
+
+    $salt = $salts[$rand_key[0]] . $salts[$rand_key[1]];
+
+    $crypt_passwd = crypt($passwd, $salt);
+
+    return $crypt_passwd;
+}
+
+/*********************************************************
+ * write_web_conf()
+ *
+ * 設定ファイルに配列の内容を書き込む
+ *
+ * [引数]
+ *       $conf_file    設定ファイル
+ *       $moddata      変更内容
+ * [返り値]
+ *       TRUE          正常
+ *       FALSE         異常
+ **********************************************************/
+function write_web_conf($conf_file, $moddata)
+{
+    global $domain;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+
+    $tmp_file = $conf_file . time() . getmypid();
+
+    /* 設定ファイルの読込権チェック */
+    if (is_readable_file($conf_file) === FALSE) {
+        return FALSE;
+    }
+
+    /* 一時ファイルの書込権チェック */
+    if (is_writable_file($tmp_file) === FALSE) {
+        return FALSE;
+    }
+
+    /* 設定ファイルをオープン */
+    $conf_fp = fopen($conf_file, "r");
+    if ($conf_fp === FALSE) {
+        $err_msg = sprintf($msgarr['22001'][SCREEN_MSG], $conf_file);
+        $log_msg = sprintf($msgarr['22001'][LOG_MSG], $conf_file);
+        return FALSE;
+    }
+
+    /* ファイルをロックする */
+    $ret = flock($conf_fp, LOCK_EX);
+    if ($ret === FALSE) {
+        $err_msg = sprintf($msgarr['22002'][SCREEN_MSG], $conf_file);
+        $log_msg = sprintf($msgarr['22002'][LOG_MSG], $conf_file);
+        fclose($conf_fp);
+        return FALSE;
+    }
+
+    /* 一時ファイルをオープン */
+    $tmp_fp = fopen($tmp_file, "x");
+    if ($tmp_fp === FALSE) {
+        $err_msg = sprintf($msgarr['22019'][SCREEN_MSG], $tmp_file);
+        $log_msg = sprintf($msgarr['22019'][LOG_MSG], $tmp_file);
+        flock($conf_fp, LOCK_UN);
+        fclose($conf_fp);
+        return FALSE;
+    }
+
+    $keys = array_keys($moddata);
+
+    while(feof($conf_fp) === FALSE) {
+        /* 一行ずつbufに格納 */
+        $buf = fgets($conf_fp);
+        if ($buf === FALSE) {
+            break;
+        }
+         
+        /* 対象行を見つけたら書き換え */
+        foreach ($keys as $key) {
+            if (strncasecmp($buf, $key, strlen($key)) == 0) {
+                $data = explode("=", $buf, 2);
+                $buf = $data[0] . "=" . $moddata[$key] . "\n";
+            }
+        }
+
+        /* 一時ファイルに書き込み */
+        $ret = fwrite($tmp_fp, $buf);
+        if ($ret === FALSE) {
+            $err_msg = sprintf($msgarr['22020'][SCREEN_MSG], $tmp_file);
+            $log_msg = sprintf($msgarr['22020'][LOG_MSG], $tmp_file);
+            flock($conf_fp, LOCK_UN);
+            fclose($conf_fp);
+            fclose($tmp_fp);
+            unlink($tmp_file);
+            return FALSE;
+        }
+    } 
+    flock($conf_fp, LOCK_UN);
+
+    fclose($conf_fp);
+    fclose($tmp_fp);
+
+
+    /* 一時ファイルを置き換え */
+    $ret = rename($tmp_file, $conf_file);
+    if ($ret === FALSE) {
+        $err_msg = sprintf($msgarr['22021'][SCREEN_MSG], $tmp_file);
+        $log_msg = sprintf($msgarr['22021'][LOG_MSG], $tmp_file);
+        unlink($tmp_file);
+        return FALSE;
+    }
+        
+    return TRUE;
+}
+/***********************************************************
+ * result_log()
+ *
+ * ログファイルに対し、エラーログ出力を行う
+ *
+ * [引数]
+ *      $resultlog      エラーメッセージ
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ ************************************************************/
+function result_log($resultlog)
+{
+    global $env;
+    global $err_log;
+    global $web_conf;
+    global $facilitynames;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    
+
+   /* syslogが設定されていた場合 */
+    if (isset($web_conf['global']['logfile']) === TRUE &&
+        $web_conf['global']['logfile'] == SYSLOG) {
+        /* 出力先名 */
+        $syslog = $facilitynames[$web_conf['global']['syslogfacility']];
+
+        /* 書き込みたいログの内容にログ表示名、ログインユーザ名を結合。*/
+        if (isset($env['loginuser']) === FALSE) {
+            $env['loginuser'] = "";
+        }
+        $msg = $_SERVER['LOGNAME'] . " " .
+               $env['loginuser'] . " " . $resultlog;
+
+        /* ログオープン */
+        $ret = openlog(IDENT, LOG_PID, $syslog);
+        if ($ret === FALSE) {
+            $err_msg .= "ログファイルのオープンに失敗しました。";
+            return FALSE;
+        }
+
+        /* ログ出力 */
+        $ret = syslog(LOG_ERR, $msg);
+        if ($ret === FALSE) {
+            $err_msg .= "ログの出力に失敗しました。";
+            return FALSE;
+        }
+
+        closelog();
+        return TRUE;
+    }
+
+    /* syslogが設定されていなかった場合 */
+    $log_time = date ('Ymd His');
+
+    /* 書き込みたいログの内容に日付、ログ表示名、ログインユーザ名を結合。*/
+    $msg = $log_time . " " . $_SERVER['LOGNAME'] . " " .
+           $env['loginuser'] . " " . $resultlog . "\n";
+
+    if (isset($web_conf['global']['logfile']) === FALSE ||
+        is_writable_file($web_conf['global']['logfile']) === FALSE) {
+        return FALSE;
+    }
+
+    if (($fp = fopen ($web_conf['global']['logfile'], 'a')) === FALSE) {
+        $err_msg .= "ログファイルのオープンに失敗しました。(" .
+                     $web_conf['global']['logfile'] .")";
+        return FALSE;
+    }
+
+    $ret = flock($fp, LOCK_EX);
+    if ($ret === FALSE){
+        $err_msg .= "ログファイルのロックに失敗しました。(" .
+                     $web_conf['global']['logfile'] .")";
+        fclose($fp);
+        return FALSE;
+    }
+
+    $ret = fwrite ($fp, $msg);
+    if ($ret === FALSE) {
+        $err_msg .= "ログの出力に失敗しました。(" .
+                     $web_conf['global']['logfile'] .")";
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return FALSE;
+    }
+    flock($fp, LOCK_UN);
+    fclose($fp);
+
+    return TRUE;
+
+}
+
+/*********************************************************
+ * is_num_check()
+ *
+ * 正整数チェック
+ *
+ * [引数]
+ *      $num            値
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function is_num_check($num)
+{
+
+    if (($num < 0) || ($num > 4294967295) ||
+        (!preg_match("/^[0-9]+$/", $num))) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * read_tab_conf()
+ * 
+ * タブ管理ファイルを読み込み、設定情報を
+ * 連想配列 $tab_confと$menu_conf に格納
+ *
+ * $tab_conf["スクリプト名"][タブ順番][タブ名] = タイトル
+ * $menu_conf["スクリプト名"][タブ名][メニュー順番][メニュー名]
+ *                                                 = タイトル
+ * [引数]
+ *       $tab_file    タブ管理ファイル名
+ * [返り値]
+ *       TRUE         正常
+ *       FALSE        異常
+ **********************************************************/
+function read_tab_conf($tab_file)
+{
+    global $domain;
+    global $tab_conf;
+    global $menu_conf;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $basedir;
+
+    /* タブ管理ファイルを定義 */
+    $tabconf_file = $basedir . ETCDIR . $domain . "/" . $tab_file;
+
+    /* ファイルの読み込み権チェック */
+    if (is_readable_file($tabconf_file) === FALSE) {
+        $err_msg = escape_html($err_msg);
+        result_log($log_msg);
+        return FALSE;
+    }
+
+    /* ファイルが空ならエラー */
+    if (filesize($tabconf_file) == 0) {
+        $err_msg = "タブ管理ファイルの内容がありません。(" .
+                   escape_html($tabconf_file) . ")";
+        $log_msg = "No contents on tab management file.(" .
+                   escape_html($tabconf_file) . ")";
+        result_log($log_msg);
+        return FALSE;
+    }
+
+    /* ファイルをオープン */
+    $fp = fopen($tabconf_file, "r");
+    if ($fp === FALSE) {
+        $err_msg = "タブ管理ファイルがオープンできません。(" .
+                   escape_html($tabconf_file) . ")";
+        $log_msg = "Cannot open tab management file.(" .
+                   escape_html($tabconf_file) . ")";
+        result_log($log_msg);
+        return FALSE;
+    }
+
+    $line_count = 0;
+
+    /* タブの読込 */
+    while (!feof($fp)) {
+        /* 一行ずつ読み込む */
+        $buf = fgets($fp, MAX_TAB_LINE);
+        if ($buf === FALSE) {
+            continue;
+        }
+        $buf = rtrim($buf);
+        $line_count++;
+
+        /* 行の頭が#のコメント行であれば無視 */
+        if (substr($buf, 0, 1) == "#") {
+            continue;
+        }
+
+        /* 空行であれば無視 */
+        if (strlen($buf) == 0) {
+            continue;
+        }
+
+        /* 先頭が/ならエラー */
+        if (substr($buf, 0, 1) == '/') {
+            $err_msg = "タブ管理ファイルに不正な行が存在します。(".
+                       escape_html($tabconf_file) ." : ".
+                       $line_count ."行目)";
+            $log_msg = "Invalid line on tab management file.(".
+                       escape_html($tabconf_file) ." : line ".
+                       $line_count .")";
+            result_log($log_msg);
+            fclose($fp);
+            return FALSE;
+        }
+
+        /* 項目が無ければエラー */
+        $tmp = explode(":", $buf, 2);
+        if (strlen($tmp[0]) == 0 || strlen($tmp[1]) == 0) {
+            $err_msg = "タブ管理ファイルに不正な行が存在します。(".
+                       escape_html($tabconf_file) ." : ".
+                       $line_count ."行目)";
+            $log_msg = "Invalid line on tab management file.(".
+                       escape_html($tabconf_file) ." : line ".
+                       $line_count .")";
+            result_log($log_msg);
+            fclose($fp);
+            return FALSE;
+        }
+
+        /* ページタイトルが長すぎるとエラー */
+        if (strlen($tmp[1]) > MAX_PAGETITLE_LENGTH) {
+            $err_msg = "ページタイトルが長すぎます。(".
+                       escape_html($tabconf_file) ." : ".
+                       $line_count ."行目)";
+            $log_msg = "Too long tilte of page.(".
+                       escape_html($tabconf_file) ." : line ".
+                       $line_count .")";
+            result_log($log_msg);
+            fclose($fp);
+            return FALSE;
+        }
+
+        /* パスに/が連続しているのは/に置換 */
+        $tmp[0] = preg_replace("/\/+/", '/', $tmp[0]);
+
+        /* 最後が/ならエラー */
+        if (substr($tmp[0], -1) == '/') {
+            $err_msg = "タブ管理ファイルに不正な行が存在します。(".
+                       escape_html($tabconf_file) ." : ".
+                       $line_count ."行目)";
+            $log_msg = "Invalid line on tab management file.(".
+                       escape_html($tabconf_file) ." : line ".
+                       $line_count .")";
+            result_log($log_msg);
+            fclose($fp);
+            return FALSE;
+        }
+
+        /* /の数でタブかメニューか判断 */
+        $re = substr_count($tmp[0], "/");
+        if ($re == 1) {
+            /* タブに格納 */
+            $path = explode("/", $tmp[0], 2);
+
+           
+            /* タブ名重複チェック */
+            if (isset($tab_conf[$path[0]][0])) {
+                for($j = 0; $j < count($tab_conf[$path[0]]); $j++) {
+                    if (key($tab_conf[$path[0]][$j]) == $path[1]) {
+                        $err_msg = "タブ管理ファイルのタブが重複しています(".
+                                   escape_html($tabconf_file) ." : ".
+                                   $line_count ."行目)";
+                        $log_msg = "Duplicate tab exists on tab management file.(".
+                                   escape_html($tabconf_file) ." : line ".
+                                   $line_count .")";
+                        result_log($log_msg);
+                        fclose($fp);
+                        return FALSE;
+                    }
+                }
+            }
+            /* 初めてセットする時は順番は0 */
+            if (!isset($tab_conf[$path[0]])) {
+                $i = 0;
+            } else {
+                $i = count($tab_conf[$path[0]]);
+            }
+            $tab_conf[$path[0]][$i][$path[1]] =
+                                   escape_html($tmp[1]);
+
+        } else if ($re == 2) {
+            /* タブの無いメニューはエラーにするため後で格納 */
+            continue;
+        } else {
+            $err_msg = "タブ管理ファイルに不正な行が存在します。(".
+                       escape_html($tabconf_file) ." : ".
+                       $line_count ."行目)";
+            $log_msg = "Invalid line on tab management file.(".
+                       escape_html($tabconf_file) ." : line ".
+                       $line_count .")";
+            result_log($log_msg);
+            fclose($fp);
+            return FALSE;
+        }
+    }
+
+    /* タブファイルにタブが無ければエラー */
+    if (!isset($tab_conf)) {
+        $err_msg = "タブ管理ファイルにタブが存在しません。(".
+                   escape_html($tabconf_file) .")";
+        $log_msg = "No tab exists on tab management file.(".
+                   escape_html($tabconf_file) .")";
+        result_log($log_msg);
+        return FALSE;
+    }
+
+    /* 先頭に戻す */
+    fseek($fp, 0);
+
+    $line_count = 0;
+
+    /* メニューの読込 */
+    while (!feof($fp)) {
+        /* 一行ずつ読み込む */
+        $buf = fgets($fp, MAX_TAB_LINE);
+        if ($buf === FALSE) {
+            continue;
+        }
+        $buf = rtrim($buf);
+        $line_count++;
+
+        /* 行の頭が#のコメント行であれば無視 */
+        if (substr($buf, 0, 1) == "#") {
+            continue;
+        }
+
+        /* 空行であれば無視 */
+        if (strlen($buf) == 0) {
+            continue;
+        }
+
+        /* /の数を数えてタブかメニューか判断 */
+        $tmp = explode(":", $buf, 2);
+
+        /* パスに/が連続しているのは/に置換 */
+        $tmp[0] = preg_replace("/\/+/", '/', $tmp[0]);
+
+        $re = substr_count($tmp[0], "/");
+        if ($re == 1) {
+            continue;
+        } else if ($re == 2) {
+            /* メニューに格納  */
+            $path = explode("/", $tmp[0], 3);
+
+            $tab_exists = FALSE;
+            if (isset($tab_conf[$path[0]])) {
+                for($j = 0; $j < count($tab_conf[$path[0]]); $j++) {
+                    /* タブ名が存在したらOK  */
+                    if (isset($tab_conf[$path[0]][$j][$path[1]])) {
+                        $tab_exists = TRUE;
+                    }
+                }
+            }
+
+            /* タブ名が存在しない場合エラー  */
+            if (!$tab_exists) {
+                    $err_msg = "「". escape_html($tmp[1]) . 
+                               "」メニューのタブがありません。(".
+                               escape_html($tabconf_file) ." : ".
+                               $line_count ."行目)";
+                    $log_msg = "[". escape_html($tmp[1]) . 
+                               "] menu tab does not exists on tab management file.(".
+                               escape_html($tabconf_file) ." : line ".
+                               $line_count . ")";
+                    result_log($log_msg);
+                    fclose($fp);
+                    return FALSE;
+            }
+
+            /* 初めてセットする時は順番は0 */
+            if (!isset($menu_conf[$path[0]][$path[1]][0])) {
+                $c = 0;
+            } else {
+                $c = count($menu_conf[$path[0]][$path[1]]);
+            }
+            $menu_conf[$path[0]][$path[1]][$c][$path[2]] = 
+                                 escape_html($tmp[1]);
+        }
+    }
+    fclose($fp);
+
+    return TRUE;
+}
+
+/*********************************************************
+ * url_search()
+ * 
+ * 現在の場所のスクリプト名,タブ名,メニュー名を返す 
+ *
+ * [引数]
+ *       なし
+ * [返り値]
+ *       なし
+ **********************************************************/
+function url_search()
+{
+    global $basedir;
+    global $topdir;
+    global $url_data;
+
+    /* 初期化 */
+    $url_data["menu"] = "";
+    $url_data["tab"] = "";
+    $url_data["script"] = "";
+    $basedir = "";
+    $topdir = "";
+
+    /* phpのinclude_pathを代入 */
+    $php_path = get_include_path();
+
+    /* 現在のフルパスを取得  */
+    $full_path = $_SERVER["SCRIPT_FILENAME"];
+
+    /* include_pathを:で区切って配列に格納 */
+    $url = explode(':', $php_path);
+
+    /* supportwebが入っているパスの検索 */
+    foreach ($url as $value) {
+        $check = strpos($value, 'postldapadmin');
+        if ($check !== FALSE) {
+            $include_dir = $value;
+            break;
+        }
+    }
+
+    /* フルパスからinclude_pathをのぞいたパスの作成 */
+    $tmp_dir = str_replace($include_dir, "", $full_path);
+
+    /* パスを区切って配列に格納 */
+    $path_comp = explode('/', $tmp_dir);
+
+    /* 現在の階層を調べる */
+    $dir_count = count($path_comp) - 1;
+
+    /* 設定ファイルとライブラリまでの絶対パス */
+    $basedir = $include_dir;
+
+    switch ($dir_count) {
+        /* login画面にいた場合の処理 */
+        case 2:
+            $url_data["script"] = $path_comp[$dir_count - 1];
+            break;
+        /* タブにいた場合の処理 */
+        case 4:
+            $url_data["tab"] = $path_comp[$dir_count - 1];
+            $url_data["script"] = $path_comp[$dir_count - 2];
+            /* コンポーネントまでの相対パス */
+            $topdir = "../../";
+            break;
+        /* メニューにいた場合の処理 */
+        case 5:
+            $url_data["menu"] = $path_comp[$dir_count - 1];
+            $url_data["tab"] = $path_comp[$dir_count - 2];
+            $url_data["script"] = $path_comp[$dir_count - 3];
+            /* コンポーネントまでの相対パス */
+            $topdir = "../../../";
+            break;
+        /* どこにも該当しなかったとき */
+        default:
+    }
+}
+
+/*********************************************************
+ * init()
+ * 
+ * 設定ファイルの読込、タブ管理ファイルの読込、セッションチェックを行う  
+ * (admin用)
+ *
+ * [引数]
+ *        なし 
+ * [返り値]
+ *        TRUE        正常
+ *        FALSE       異常 
+ **********************************************************/
+function init()
+{	
+    global $sesskey;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $url_data;
+
+    /* $basedirのセット */
+    /* $topdirのセット */
+    url_search();    
+
+    if (isset($_POST["sk"])) {
+        $sesskey = $_POST["sk"];
+    }
+
+    /* ドメインの取得 */
+    $domain = $_SERVER["DOMAIN"];
+
+    /* コンポーネント名の取得 */
+    $cmp = $url_data["script"];
+
+    /* 設定ファイルの読込 */
+    if (read_web_conf($cmp) === FALSE) {
+        return FALSE;
+    }
+
+    /* タブ管理ファイルの読込 */
+    if (read_tab_conf(ADMINTABCONF) === FALSE) {
+        return FALSE;
+    }
+
+    /* メッセージファイルの読込 */
+    if (make_msgarr(MESSAGEFILE) === FALSE) {
+        return FALSE;
+    }
+       
+    /* 引数チェック */
+    if (isset($sesskey) === FALSE) {
+        err_location("index.php?e=2");
+        exit (1);
+    }
+
+    /* セッションチェック */
+    if (is_sysadm($sesskey) !== TRUE) {
+        err_location("index.php?e=1");
+        exit (1);
+    }
+    if (isset($_POST["msg"])) {
+        $err_msg = $_POST["msg"];
+    } else {
+        $err_msg = "";
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * init_user()
+ *
+ * 設定ファイルの読込、タブ管理ファイルの読込、セッションチェックを行う
+ * (ユーザ用)
+ *
+ * [引数]
+ *        なし
+ * [返り値]
+ *        TRUE        正常
+ *        FALSE       異常
+ **********************************************************/
+function user_init()
+{
+    global $sesskey;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $url_data;
+    global $env;
+
+    /* $basedirのセット */
+    /* $topdirのセット */
+    url_search();
+
+    if (isset($_POST["sk"]) === TRUE) {
+        $sesskey = $_POST["sk"];
+    }
+
+    /* ドメインの取得 */
+    $domain = $_SERVER["DOMAIN"];
+
+    /* コンポーネント名の取得 */
+    $cmp = $url_data["script"];
+
+    /* 設定ファイルの読込 */
+    if (read_web_conf($cmp) === FALSE) {
+        return FALSE;
+    }
+
+    /* タブ管理ファイルの読込 */
+    if (read_tab_conf(USERTABCONF) === FALSE) {
+        return FALSE;
+    }
+
+    /* メッセージファイルの読込 */
+    if (make_msgarr(MESSAGEFILE) === FALSE) {
+        return FALSE;
+    }
+
+    /* 引数チェック */
+    if (isset($sesskey) === FALSE) {
+        err_location("index.php?e=2");
+        exit (1);
+    }
+
+    /* セッションチェック */
+    if (is_user($sesskey) !== TRUE) {
+        /* ログイン画面へ遷移 */
+        if (isset ($env["ldap_server_down"])) {
+            result_log("NULL LDAP CONNECTION:NG:" . $log_msg);
+            err_location("index.php?e=3");
+        } else {
+            err_location("index.php?e=1");
+        }
+        exit (1);
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * is_positive_number()
+ *
+ * チェック正の整数
+ *
+ * [引数]
+ *       $number            正の整数
+ * [返り値]
+ *       TRUE            正常
+ *       FALSE           異常
+ **********************************************************/
+function is_positive_number($number)
+{
+    global $err_msg;
+    global $log_msg;
+    /*チェック正の整数*/
+    if (preg_match('/^[1-9][0-9]*$/', $number) !== 1) {
+        $err_msg .= "正の整数ではありませんでした。(" . $number . ")";
+        $log_msg .= "Not a positive integer.(" . $number . ")";
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * is_integer_number()
+ *
+ * チェック整数
+ *
+ * [引数]
+ *       $number            整数
+ * [返り値]
+ *       TRUE            正常
+ *       FALSE           異常
+ **********************************************************/
+function is_integer_number($number)
+{
+    /*チェック正の整数*/
+    if (preg_match('/^[0-9]+$/', $number) !== 1) {
+        $err_msg = "整数ではありません。(" . $number . ")";
+        $log_msg = "Not a integer.(" . $number . ")";
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_encrypt_type()
+ *
+ * 暗号化の存在チェック
+ *
+ * [引数]
+ *       $val            暗号化の値
+ * [返り値]
+ *       TRUE            正常
+ *       FALSE           異常
+ **********************************************************/
+function check_encrypt_type($val)
+{
+
+    global $pass_enc;
+    /*暗号化の存在することチェック*/
+    if (isset($pass_enc[$val]) === FALSE) {
+        $err_msg = "パスワードエンコード設定が不正です。(" . $val . ")";
+        $log_msg = "Invalid Password Encrypt.(" . $val . ")";
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_boolean()
+ *
+ * 数値の0/1チェック
+ *
+ * [引数]
+ *       $val            検査値
+ * [返り値]
+ *       TRUE            正常
+ *       FALSE           異常
+ **********************************************************/
+function check_boolean($val)
+{
+    /* 1文字でないならエラー */
+    $len = strlen($val);
+    if ($len != 1) {
+        return FALSE;
+    }
+
+    /* 数値のみでなければエラー */
+    if (is_num_check($val) === FALSE) {
+        return FALSE;
+    }
+
+    /* 0か1じゃなければエラー */
+    if (($val != 0) && ($val != 1)) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/***********************************************************
+ * is_executable_file()
+ *
+ * ファイルの実行権チェック
+ *
+ * [引数]
+ *      $filename       チェック対象ファイル
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ ************************************************************/
+function is_executable_file($filename)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* STAT情報のキャッシュクリア */
+    clearstatcache();
+
+    /* 存在チェック */
+    if (file_exists($filename) === FALSE) {
+        $err_msg = sprintf($msgarr['22009'][SCREEN_MSG], $filename);
+        $log_msg = sprintf($msgarr['22009'][LOG_MSG], $filename);
+        return FALSE;
+    }
+
+    /*  ディレクトリチェック */
+    if (is_dir($filename) === TRUE) {
+        $err_msg = sprintf($msgarr['22010'][SCREEN_MSG], $filename);
+        $log_msg = sprintf($msgarr['22010'][LOG_MSG], $filename);
+        return FALSE;
+    }
+
+    /*  ファイルの実行権チェック */
+    if (is_executable($filename) === FALSE) {
+        $err_msg = sprintf($msgarr['22033'][SCREEN_MSG], $filename);
+        $log_msg = sprintf($msgarr['22033'][LOG_MSG], $filename);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+?>

@@ -1,0 +1,73 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title><<TITLE>></title>
+<<JAVASCRIPT>>
+<link rel="stylesheet" type="text/css" href="../../../postldapadmin.css">
+</head>
+<body topmargin="0" leftmargin="0">
+<div class="title">
+  <form method="post" action="../../../logout.php">
+    <<SK>>
+  <input type="submit" value="" name="logout" class="logout_btn">
+</form>      
+</div>
+<div class="topic"><<TOPIC>></div>
+<div class="message"><<MESSAGE>></div>
+<<TAB>>
+<div class="frame">
+  <form method="POST" action="index.php" name="data_form">
+    <table class="table">
+      <tr>
+        <td class="key1">ユーザ名</td>
+        <td class="value"><input type="text" size="35" name="uid" maxlength="32" value="<<UID>>">
+        </td>
+      </tr>
+      <tr>
+        <td class="key1">パスワード</td>
+        <td class="value"><input type="password" name="pass" size="15" maxlength="<<MAXPASSLEN>>"></td>
+      </tr>
+      <tr>
+        <td class="key1">パスワード（確認）</td>
+        <td class="value"><input type="password" name="re_pass" size="15" maxlength="<<MAXPASSLEN>>"></td>
+      </tr>
+      <tr>
+        <td class="key1">メールボックス容量</td>
+        <td class="value">
+        <input type="text" size="10" value="<<QUOTA>>" name="quota" maxlength="<<QUOTASIZE>>"><<QUOTAUNIT>>
+        </td>
+      </tr>
+      <tr>
+        <td class="key1">メールエイリアス</td>
+        <td class="value">
+        <input type="text" size="39" name="alias" value="<<ALIAS>>" maxlength="32">
+        </td>
+      </tr>
+<<FORWARD_START>>
+      <tr>
+        <td class="key1">メール転送アドレス</td>
+        <td class="value">
+        <input type="text" name="trans" size="39" value="<<TRANS>>" maxlength="256" onBlur="check(this.value)">
+        <br>
+        サーバにメールを
+        <input type="radio" name="save" value="0" <<SAVEON>>>残す
+        <input type="radio" name="save" value="1" <<SAVEOFF>>>残さない
+        </td>
+      </tr>
+<<FORWARD_END>>
+    </table>
+    <br>
+    <<SK>>
+    <input type="submit" name="add" value="" class="add_btn">
+    <input type="submit" name="cancel" value="" class="cancel_btn">
+  </form>
+</div>
+<form method="post" name="common">
+  <<SK>>
+</form>
+<div class="footer"></div>
+</body>
+</html>

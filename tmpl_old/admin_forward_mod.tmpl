@@ -1,0 +1,140 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title><<TITLE>></title>
+<<JAVASCRIPT>>
+<link rel="stylesheet" type="text/css" href="../../../postldapadmin.css">
+</head>
+<body topmargin="0" leftmargin="0">
+<div class="title">
+  <form method="post" action="../../../logout.php">
+    <<SK>>
+    <input type="submit" value="" name="logout" class="logout_btn">
+  </form>
+</div>
+<div class="topic"><<TOPIC>></div>
+<div class="message"><<MESSAGE>></div>
+<<TAB>>
+
+    <!-- ナビゲーションタブ終了 -->
+
+
+      <!-- メールフィルタ機能開始 -->
+      <div id="main" class="main">
+
+        <!-- フィルタフォーム開始 -->
+        <form id="filter_form" method="post">
+            <table id="filter_fields" class="filter_tables">
+                <tr><th colspan="1">条件</th><th>削除</th></tr>
+                <!-- 各ルール開始 -->
+
+<<LOOP_START>>
+                <tr>
+
+                <!-- ID:<<FILTER_ID>>チェックボックス -->
+                <td class="filter_check_boxes filter_input_cell">
+                    <input type="hidden" name="id[<<FILTER_ID>>]" value="<<FILTER_ID>>">
+
+                    <!-- forward_conf -->
+                    <input type="radio" name="transfer_rule<<FILTER_ID>>" value="0" <<ALL_FORWARD>>>
+                    <span>全て転送</span><br>
+                    <input type="radio" name="transfer_rule<<FILTER_ID>>" value="1" <<DETAIL_FORWARD>>>
+                    <span>詳細設定</span><br>
+
+                    <!-- sender -->
+                    &emsp;<input type="checkbox" name="sender_enable<<FILTER_ID>>" <<FORWARD_CHECK>>>
+                    <span>送信者</span>
+                    <!-- sender -->
+                    <input type="text" class="forward_textbox" name="sender<<FILTER_ID>>" value="<<FORWARD_TEXT>>" maxlength="128">
+                    <select class="forward_selectbox" name="sender_option<<FILTER_ID>>">
+                      <option value='0' <<FORWARD_MATCH>>>と一致する</option>
+                      <option value='1' <<FORWARD_INCLUDE>>>を含む</option>
+                      <option value='2' <<FORWARD_NOT_INC>>>を含まない</option>
+                      <option value='3' <<FORWARD_EMPTY>>>が空である</option>
+                    </select><br>
+
+                    <!-- subject -->
+                    &emsp;<input type="checkbox" name="subject_enable<<FILTER_ID>>" <<SUBJECT_CHECK>>>
+                    <span>件名</span>
+                    <!-- subject -->
+                    <input type="text" class="forward_textbox" name="subject<<FILTER_ID>>" value="<<SUBJECT_TEXT>>" maxlength="128">
+                    <select class="forward_selectbox" name="subject_option<<FILTER_ID>>">
+                      <option value='0' <<SUBJECT_MATCH>>>と一致する</option>
+                      <option value='1' <<SUBJECT_INCLUDE>>>を含む</option>
+                      <option value='2' <<SUBJECT_NOT_INC>>>を含まない</option>
+                      <option value='3' <<SUBJECT_EMPTY>>>が空である</option>
+                    </select><br>
+
+                    <!-- recipient -->
+                    &emsp;<input type="checkbox" name="recipient_enable<<FILTER_ID>>" <<RECIPT_CHECK>>>
+                    <span>宛先(Cc,To)</span>
+                    <!-- recipient -->
+                    <input type="text" class="forward_textbox" name="recipient<<FILTER_ID>>" value="<<RECIPT_TEXT>>" maxlength="128">
+                    <select class="forward_selectbox" name="recipient_option<<FILTER_ID>>">
+                      <option value='0' <<RECIPT_MATCH>>>と一致する</option>
+                      <option value='1' <<RECIPT_INCLUDE>>>を含む</option>
+                      <option value='2' <<RECIPT_NOT_INC>>>を含まない</option>
+                      <option value='3' <<RECIPT_EMPTY>>>が空である</option>
+                    </select><br>
+
+                    <!-- forward -->
+                    <br>
+                    <span>&nbsp;&nbsp;転送先</span>
+                    <input type="text" name="forward_address<<FILTER_ID>>" value="<<TRANSFER_ADDR>>" maxlength="128">
+
+                    <!-- restore -->
+                    <span>サーバにメールを</span>
+                    <select name="save<<FILTER_ID>>">
+                      <option value='0' <<MAIL_LEAVE>>>残す</option>
+                      <option value='1' <<MAIL_DEL>>>残さない</option>
+                    </select><br>
+                    <br><!-- 表示用 -->
+                </td>
+
+                <!-- delete -->
+                <td class="filter_actions delete_button_holder">
+                    <button  class="delete_button" onclick="confirmDelete('delete', '<<FILTER_ID>>')">
+                        <img src="../../../images/mailfilter_trash_can.jpg" alt="削除">
+                    </button>
+                </td>
+                </tr>
+                <!-- 各ルール終了 -->
+
+<<LOOP_END>>
+
+            </table>
+            <br>
+            <img class="bmessage" src="../../../images/spacer.gif">
+            <img class="bmessage" src="../../../images/spacer.gif">
+            <input type="submit" name="modify" value="" class="add_btn">
+            <input type="submit" name="cancel" value="" class="cancel_btn" >
+            <input id="filterId" type="hidden" name="filterId" value="">
+            <input id="buttonName" type="hidden" name="buttonName" value="">
+            <<SK>>
+            <<HIDDEN>>
+        </form>
+        <!-- フィルタフォーム終了 -->
+
+        
+        <!-- start updateFiltersForm form -->
+        <form id="updateFiltersForm" method="post">
+            <<SK>>
+            <input id="buttonName" type="hidden" name="buttonName" value="">
+        </form>
+        <!-- end updateFiltersForm form -->
+        
+      <br><br>
+
+
+      </div>
+      <!-- メールフィルタ機能終了 -->
+
+  <form method="post" name="common">
+    <<SK>>
+  </form>
+<div class="footer"></div>
+</body>
+</html>

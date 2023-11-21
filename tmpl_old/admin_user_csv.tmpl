@@ -1,0 +1,60 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title><<TITLE>></title>
+<<JAVASCRIPT>>
+<link rel="stylesheet" type="text/css" href="../../../postldapadmin.css">
+</head>
+<body topmargin="0" leftmargin="0">
+<div class="title">
+  <form method="post" action="../../../logout.php">
+    <<SK>>
+    <input type="submit" value="" name="logout" class="logout_btn">
+  </form>
+</div>
+<div class="topic"><<TOPIC>></div>
+<div class="message">&nbsp;</div>
+<<TAB>>
+<div class="frame">
+  <form name="form" method="POST" action="result.php" enctype="multipart/form-data">
+    <table class="table">
+      <tr>
+        <td class="key1">動作タイプ</td>
+        <td class="value">
+        <input type="radio" name="runtype" value="add">登録
+        <input type="radio" name="runtype" value="del">削除
+        </td>
+      </tr>
+      <tr>
+        <td class="key1" rowspan="2">オプション</td>
+        <td class="value">
+        <input type="checkbox" name="change" value=ON>既存のデータを上書き（削除の場合は無視されます）
+        </td>
+      <tr>
+        <td class="value">
+        <input type="checkbox" name="err" value=ON>エラーの場合も処理を継続
+        </td>
+      </tr>
+      <tr>
+        <td class="key1">アップロードファイル</td>
+        <td class="value">
+        <input type="file" name="uploadfile" size=50></td>
+      </tr>
+      <tr>
+        <td class="key1">ファイルチェック</td>
+        <td class="value"><input type="submit" name="fcheck" value="" class="file_check_btn" onClick="resultwindow()"></td>
+      </tr>
+    </table><br>
+    <<SK>>
+    <input type="submit" name="upload" value="" class="mod_btn" onClick="return uploadconfirm('CSV一括処理を開始します\nよろしいですか?')">
+  </form> 
+</div>
+<form method="post" name="common">
+  <<SK>>
+</form>
+<div class="footer"></div>
+</body>
+</html>

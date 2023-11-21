@@ -1,0 +1,522 @@
+<?php
+
+/*
+ * postLDAPadmin
+ *
+ * Copyright (C) 2006,2007 DesigNET, INC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
+/***********************************************************
+ * セッションライブラリ
+ *
+ * $RCSfile$
+ * $Revision$
+ * $Date$
+ **********************************************************/
+
+/* 管理者 */
+define("SYSADM", -1);
+
+/* 一般ユーザ */
+define("GENUSER", 1);
+
+/* Encryption scheme */
+define("METHOD", "AES-128-CBC");
+
+/* 認証モード */
+define("WEBAUTHMODE_OFF", "0");
+define("WEBAUTHMODE_ON", "1");
+
+/* ユーザの自動作成 */
+define("AUTOMAKEUSER", "1");
+/***********************************************************
+ * sess_start()
+ *
+ * セッション開始
+ *
+ * [引数]
+ *      $user           管理者名
+ *      $passwd         パスワード
+ *      &$sess_key      セッションキー
+ *      &$chk_mode      チェックモード
+ * [返り値]
+ *      TRUE            OK
+ *      FALSE           NG
+ **********************************************************/
+function sess_start($user, $passwd, &$sess_key, &$chk_mode = SYSADM)
+{
+
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $env;
+
+
+    /* ユーザチェック */
+    if (user_check($user, $passwd, $chk_mode) === FALSE) {
+       return FALSE;
+    }
+
+    /* セッションキー作成 */
+    if (sess_key_make($user, $passwd, $sess_key) === FALSE) {
+       return FALSE;
+    }
+
+    /* ログインユーザ */
+    $env['loginuser'] = $user;
+
+    return TRUE;
+}
+
+/***********************************************************
+ * user_check()
+ *
+ * アカウントのパスワードチェック
+ *
+ * [引数]
+ *      $name           アカウント名 
+ *      $passwd         パスワード 
+ *      &$limit         有効期限
+ *      $chk_mode       チェックモード
+ * [返り値]
+ *      TRUE            OK
+ *      FALSE           NG
+ **********************************************************/
+function user_check($name, $passwd, $chk_mode)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $env;
+    global $web_conf;
+
+
+    /* 一般ユーザチェック */
+    if ($chk_mode === GENUSER) {
+        if ($web_conf['global']['webauthmode'] === WEBAUTHMODE_ON){
+            return web_auth_user($name, $passwd);
+        }
+        return general_user_check($name, $passwd);
+    }
+
+    /* 管理者チェック */
+    if ($web_conf['global']['adminname'] != $name) {
+        return FALSE;
+    }
+
+    $mode = SYSADM;
+
+    /* デコード時にパスワードに付着するNULLを切除 */
+    $passwd = trim($passwd);
+
+    /* パスワードチェック */
+    if (md5($passwd) != $web_conf['global']['adminpasswd']) {
+        $err_msg = $msgarr['04001'][SCREEN_MSG];
+        $log_msg = $msgarr['04001'][LOG_MSG];
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/***********************************************************
+ * sess_key_make()
+ * 
+ * セッションキーを作成する
+ *
+ * [引数]
+ *      $user         ユーザID
+ *      $passwd       パスワード
+ *      &$sess_key    生成したセッションキー
+ * [返り値]
+ *      TRUE          正常
+ *      FALSE         エラー
+ **********************************************************/
+function sess_key_make ($user, $passwd, &$sess_key)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    
+    /* adminキーの読込み */
+    if (admin_key_read($akey) === FALSE) {
+        return FALSE;
+    }
+    /* 暗号化用文字列生成 */
+    $input = sprintf("%s:%s:%s", time() + $web_conf['global']['sessiontimeout'], $user, $passwd);
+
+    /* 暗号化 */
+    $ivlen = openssl_cipher_iv_length(METHOD);
+    $iv = openssl_random_pseudo_bytes($ivlen);
+    $encrypted_data = openssl_encrypt($input, METHOD, $akey, OPENSSL_RAW_DATA, $iv);
+
+    /* 受け渡し用エンコード */
+    $sess_key = base64_encode($iv . $encrypted_data);
+
+    return TRUE;
+}
+
+/***********************************************************
+ * sess_key_decode()
+ *
+ * セッションキーを復号する
+ *
+ * [引数]
+ *       $sess_key  セッションキー
+ *       &$dec_key  デコードしたセッションキー
+ * [返り値]
+ *       TRUE       正常
+ *       FALSE      エラー
+ **********************************************************/
+function sess_key_decode($sess_key, &$dec_key) 
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $basedir;
+
+    # adminキーの読込み
+    if (admin_key_read($akey) === FALSE) {
+        return FALSE;
+    }
+
+    # 文字列の変換
+    $d64 = base64_decode($sess_key);
+
+    $ivlen = openssl_cipher_iv_length(METHOD);
+    $iv = substr($d64, 0, $ivlen);
+    $encrypted_data = substr($d64, $ivlen);
+
+    # 復号化
+    $dec_key = openssl_decrypt($encrypted_data, METHOD, $akey, OPENSSL_RAW_DATA, $iv);
+
+    return TRUE;
+}
+
+/***********************************************************
+ * admin_key_read()
+ *
+ * admin.keyを読み込む
+ *
+ * [引数]
+ *       $akey    admin.keyの一行目
+ * [返り値]
+ *       TRUE     正常
+ *       FALSE    エラー
+ **********************************************************/
+function admin_key_read (&$akey)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $basedir;
+
+    /* 暗号化キーのパスをセット */
+    $admkey_file = $basedir . ETCDIR . $domain . "/" . ADMKEY;
+
+    # adminキーのチェック
+    if (is_readable_file($admkey_file) === FALSE) {
+        $tmp_err_msg = $err_msg;
+        $err_msg = sprintf($msgarr['04002'][SCREEN_MSG], $tmp_err_msg);
+        $log_msg = sprintf($msgarr['04002'][LOG_MSG], $tmp_err_msg);
+        return FALSE;
+    }
+    # 暗号化キーファイルのオープン
+    $tmp = file ($admkey_file);
+
+    # チェック
+    if ($tmp === FALSE) {
+        $err_msg = sprintf($msgarr['04003'][SCREEN_MSG], $admkey_file);
+        $log_msg = sprintf($msgarr['04003'][LOG_MSG], $admkey_file);
+        return FALSE;
+    }
+
+    # ファイルの内容チェック
+    if (is_null($tmp[0]) === TRUE) {
+        $err_msg = sprintf($msgarr['04004'][SCREEN_MSG], $admkey_file);
+        $log_msg = sprintf($msgarr['04004'][LOG_MSG], $admkey_file);
+        return FALSE;
+    }
+
+    # 終端の改行を削除して格納
+    $akey = rtrim($tmp[0]);
+
+    return TRUE;
+}
+
+
+/***********************************************************
+ * sess_logout()
+ *
+ * ログアウト
+ *
+ * [引数]
+ *      $sess_key       セッションキー
+ * [返り値]
+ *      TRUE            OK
+ **********************************************************/
+function sess_logout($sess_key)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $env;
+
+    if ($sess_key == "") {
+        return TRUE;
+    }
+
+    /* デコード */
+    if (sess_key_decode($sess_key, $dec_key) === FALSE) {
+        return TRUE;
+    }
+
+    /* 分割 */
+    list($time, $user, $passwd) = explode(':', $dec_key, 3);
+
+    /* ログインユーザ */
+    $env['loginuser'] = $user;
+    $env['loginpasswd'] = $passwd;
+
+    return TRUE;
+}
+
+/***********************************************************
+ * sess_check()
+ *
+ * セッション認証
+ *
+ * [引数]
+ *      $sess_key 	セッションキー
+ *      $chk_mode	特権
+ * [返り値]
+ *      TRUE            OK
+ *      FALSE           NG
+ ************************************************************/
+function sess_check (&$sess_key, $chk_mode)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $env;
+    global $web_conf;
+
+    /* リファラの文字数取得 */
+    $len = strlen($web_conf["global"]["referrerurl"]);
+
+    /* リファラのチェック */
+    $ref = "";
+    if (isset($_SERVER["HTTP_REFERER"])) {
+        $ref = $_SERVER["HTTP_REFERER"];
+    }
+    if (strncmp($web_conf["global"]["referrerurl"], $ref, $len) != 0) {
+        $err_msg = $msgarr['04005'][SCREEN_MSG];
+        $log_msg = $msgarr['04005'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* セッションキーのNULLチェック */
+    if (is_null($sess_key) === TRUE) {
+        $err_msg = $msgarr['04005'][SCREEN_MSG];
+        $log_msg = $msgarr['04005'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* セッションキーをデコードする */
+    if (sess_key_decode($sess_key, $dec_key) === FALSE) {
+        return FALSE;
+    }
+
+    list($time, $user, $passwd) = explode(':', $dec_key, 3);
+    if (is_null($time) === TRUE || is_null($user) === TRUE || 
+        is_null($passwd) === TRUE) {
+        $err_msg = $msgarr['04005'][SCREEN_MSG];
+        $log_msg = $msgarr['04005'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* ログインユーザ */
+    $env['loginuser'] = $user;
+
+    /* アカウントのチェック */
+    if (user_check($user, $passwd, $chk_mode) === FALSE) {
+        return FALSE;
+    }
+
+    /* セッションタイムのチェック */
+    if ($time < time()) {
+        return FALSE;
+    }
+
+    /* セッションキーを更新 */
+    if (sess_key_make($user, $passwd, $sess_key) === FALSE) {
+       return FALSE;
+    }
+
+
+    return TRUE;
+}
+
+/***********************************************************
+ * is_sysadm()
+ *
+ * システム管理者用セッションチェック
+ *
+ * [引数]
+ *      $sess_key       セッションキー
+ * [返り値]
+ *      TRUE            OK
+ *      FALSE           NG
+ ************************************************************/
+function is_sysadm (&$sess_key)
+{
+    # システム管理者
+    return sess_check ($sess_key, SYSADM);
+}
+
+/***********************************************************
+ * general_user_check()
+ *
+ * 一般ユーザパスワードチェック
+ * [引数]
+ *      $name           ユーザ名 
+ *      $passwd         パスワード 
+ * [返り値]
+ *      TRUE            OK
+ *      FALSE           NG
+ **********************************************************/
+function general_user_check($name, $passwd)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    global $env;
+    global $url_data;
+
+    $result = array();
+    $attrs = array();
+    $lfilter = mk_filter($name);
+    $ret = main_get_entry($web_conf[$url_data["script"]]["ldapusersuffix"] . 
+                          "," . $web_conf[$url_data["script"]]["ldapbasedn"],
+                   $lfilter,
+                   $attrs,
+                   $web_conf["postldapadmin"]["ldapscope"],
+                   $result);
+    if ($ret != LDAP_OK) {
+        return FALSE;
+    }
+
+    $env["user_self"] = TRUE;
+    $env["user_selfdn"] = $result[0]["dn"];
+    $env["user_selfpw"] = $passwd;
+
+    /* パスワードチェック(LDAPバインド) */
+    $ds = LDAP_connect_server();
+    if ($ds == LDAP_ERR_BIND) {
+        return FALSE;
+    }
+    ldap_unbind($ds);
+
+    return TRUE;
+}
+
+/***********************************************************
+ * web_auth_user()
+ *
+ * 一般ユーザWeb認証チェック
+ * [引数]
+ *      $name           ユーザ名 
+ *      $passwd         パスワード
+ * [返り値]
+ *      TRUE            OK
+ *      FALSE           NG
+ **********************************************************/
+function web_auth_user($name, $passwd)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    global $env;
+    global $url_data;
+
+    $result = array();
+    $attrs = array();
+    $lfilter = mk_filter($name);
+    $ret = main_get_entry($web_conf[$url_data["script"]]["ldapusersuffix"] .
+                          "," . $web_conf[$url_data["script"]]["ldapbasedn"],
+                   $lfilter,
+                   $attrs,
+                   $web_conf["postldapadmin"]["ldapscope"],
+                   $result);
+    if ($ret === LDAP_OK) {
+        $env["user_self"] = FALSE;
+        $env["user_selfdn"] = $result[0]['dn'];
+
+        return TRUE;
+    } 
+    if ($ret !== LDAP_ERR_NODATA) {
+        return FALSE;
+    }
+    if ($web_conf['global']['webauthmakeuser'] !== AUTOMAKEUSER) {
+        return FALSE;
+    }
+    /* ユーザ作成用配列の作成  */
+    $makedata = array('uid' => $name, 'pass' => $passwd);
+    $result_dn = '';
+
+    /* 登録データのチェック */
+    $ret = check_add_data($makedata);
+    if ($ret !== FUNC_TRUE) {
+        return FALSE;
+    }
+    if (add_user($makedata, $result_dn) === TRUE ) {
+        $err_msg = '';
+        $log_msg = '';
+
+        $env["user_self"] = FALSE;
+        $env["user_selfdn"] = $result_dn;
+
+        return TRUE;
+    }
+    $err_msg = $msgarr['26012'][SCREEN_MSG];
+    $log_msg = $msgarr['26013'][LOG_MSG];
+
+    return FALSE;
+}
+
+/***********************************************************
+ * is_user()
+ *
+ * ユーザ用セッションチェック
+ *
+ * [引数]
+ *      $sess_key     セッションキー
+ * [返り値]
+ *      TRUE          OK
+ *      FALSE         NG
+ ************************************************************/
+function is_user (&$sess_key)
+{
+    /* 一般ユーザ */
+    return sess_check ($sess_key, GENUSER);
+}
+
+?>

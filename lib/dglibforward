@@ -1,0 +1,1131 @@
+<?php
+/*
+ * postLDAPadmin
+ *
+ * Copyright (C) 2006,2007 DesigNET, INC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
+/***********************************************************
+ * メール転送設定処理用ライブラリ
+ *
+ * $RCSfile$
+ * $Revision$
+ * $Date$
+ **********************************************************/
+// 最大メールアドレス長(forward用)
+define("FORWARD_LENGTH", 128);
+// forwardconfフラグ
+define("FORWARD_ON", "1");
+// csv用オーダー文字列長
+define("ORDER_CSV_LENGTH", 128);
+// csv用アーティクル文字列長
+define("ARTICLE_CSV_LENGTH", 1024);
+
+// アーティクル整形関数用default
+define("FROM_FLAG", "F");
+define("FROM_TERM", "f");
+define("SUBJECT_FLAG", "S");
+define("SUBJECT_TERM", "s");
+define("RECIPIENT_FLAG", "T");
+define("RECIPIENT_TERM", "t");
+define("TRANS_ADDR", "A");
+define("RECEIVED_MAIL", "d");
+define("RECEIVED_ON", "0");
+define("RECEIVED_OFF", "1");
+define("INVALID_TERM", "0");
+define("MATCH_TERM", "1");
+define("INCLUDE_TERM", "2");
+define("NOT_INCLUDE_TERM", "3");
+define("EMPTY_TERM", "4");
+define("MATCH_INPUT", "0");
+define("INCLUDE_INPUT", "1");
+define("NOT_INCLUDE_INPUT", "2");
+define("EMPTY_INPUT", "3");
+
+// メール転送画面返り値
+define("SENDER_ERR", -1);
+define("SUBJECT_ERR", -2);
+define("RECIPIENT_ERR", -3);
+define("FORWARD_ERR", -4);
+define("ARTICLE_ERR", -5);
+
+/*********************************************************
+ * order_analysis
+ *
+ * フィルタオーダーの解析を行なう
+ *
+ * [引数]
+ *         $ldap         LDAPから取得したオーダーの値
+ *         $filterorder  解析結果
+ * [返り値]
+ *         無し
+ *
+ **********************************************************/
+function order_analysis($ldap, &$filterorder)
+{
+    // ":"で区切る
+    $data = explode(":", $ldap);
+
+    foreach ($data as $value) {
+        // 文字列を1バイトで分割
+        $element[0] = mb_substr($value, 0, 1);
+        $element[1] = mb_substr($value, 1);
+
+        // +、-を判定(+なら1、-なら0に変換)
+        $status = "1";
+        if ($element[0] === "-") {
+            $status = "0";
+        }
+        $tmp_array = array("filter_id" => $element[1],
+                           "state" => $status);
+
+        // $filteroderにpushしていく
+        array_push($filterorder, $tmp_array);
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * article_analysis
+ *
+ * フィルタアーティクルの解析を行なう
+ *
+ * [引数]
+ *         $ldap           LDAPから取得したオーダーの値
+ *         $filterarticle  解析結果
+ * [返り値]
+ *         TRUE     正常
+ *         FALSE    異常
+ *
+ **********************************************************/
+function article_analysis($ldap, &$filterarticle)
+{
+
+    $pre_article = array();
+
+    // データがあるだけ解析
+    foreach ($ldap as $encode_str) {
+        // base64デコード
+        $decode_str = base64_decode($encode_str);
+
+        // 一文字目解析
+        $tmp_data = explode(":", $decode_str, 2);
+
+        // フィルターID取得
+        // 重複チェック
+        if (isset($pre_article[$tmp_data[0]]) === TRUE) {
+            // 重複していたエラーメッセージセット
+            return FALSE;
+        }
+
+        // article部分の取得
+        $article = $tmp_data[1];
+
+        // articleの長さだけ繰り返す
+        for ($article_len = strlen($article);
+             $article_len > 0;
+             $article_len = strlen($article)) {
+            // 一文字目のタイプを取得する
+            $type = substr($article, 0, 1);
+
+            // 取得したタイプにより処理を行なう
+            switch ($type) {
+                // from条件の処理
+                case FROM_FLAG :
+                    // 文字数と切り出し対象を取得
+                    $buf = explode(":", $article, 2);
+                    $strnum = substr($buf[0], 1);
+                    $strdata = $buf[1];
+
+                    // 取得した条件を受け取る
+                    $pre_article[$tmp_data[0]][FROM_FLAG] = substr($strdata, 0, $strnum);
+
+                    // articleを修正
+                    $article = substr($strdata, $strnum);
+                break;
+
+                // from_term条件の処理
+                case FROM_TERM :
+                    // 2文字目の切り出し
+                    $pre_article[$tmp_data[0]][FROM_TERM] = substr($article, 1, 1);
+
+                    // articleを修正
+                    $article = substr($article, 2);
+                break;
+
+                // subject条件の処理
+                case SUBJECT_FLAG :
+                    // 文字数と切り出し対象を取得
+                    $buf = explode(":", $article, 2);
+                    $strnum = substr($buf[0], 1);
+                    $strdata = $buf[1];
+
+                    // 取得した条件を受け取る
+                    $pre_article[$tmp_data[0]][SUBJECT_FLAG] = substr($strdata, 0, $strnum);
+
+                    // articleを修正
+                    $article = substr($strdata, $strnum);
+                break;
+
+                // subject_off条件の処理
+                case SUBJECT_TERM :
+                    // 2文字目の切り出し
+                    $pre_article[$tmp_data[0]][SUBJECT_TERM] = substr($article, 1, 1);
+
+                    // articleを修正
+                    $article = substr($article, 2);
+                break;
+
+                // recipient条件の処理
+                case RECIPIENT_FLAG :
+                    // 文字数と切り出し対象を取得
+                    $buf = explode(":", $article, 2);
+                    $strnum = substr($buf[0], 1);
+                    $strdata = $buf[1];
+
+                    // 取得した条件を受け取る
+                    $pre_article[$tmp_data[0]][RECIPIENT_FLAG] = substr($strdata, 0, $strnum);
+
+                    // articleを修正
+                    $article = substr($strdata, $strnum);
+                break;
+
+                // recipient_off条件の処理
+                case RECIPIENT_TERM :
+                    // 2文字目の切り出し
+                    $pre_article[$tmp_data[0]][RECIPIENT_TERM] = substr($article, 1, 1);
+
+                    // articleを修正
+                    $article = substr($article, 2);
+                break;
+
+                // trans_addr条件の処理
+                case TRANS_ADDR :
+                    // 文字数と切り出し対象を取得
+                    $buf = explode(":", $article, 2);
+                    $strnum = substr($buf[0], 1);
+                    $strdata = $buf[1];
+
+                    // 取得した条件を受け取る
+                    $pre_article[$tmp_data[0]][TRANS_ADDR] = substr($strdata, 0, $strnum);
+
+                    // articleを修正
+                    $article = substr($strdata, $strnum);
+                break;
+
+                // recived_mail条件の処理
+                case RECEIVED_MAIL :
+                    // 2文字目の切り出し
+                    $pre_article[$tmp_data[0]][RECEIVED_MAIL] = substr($article, 1, 1);
+
+                    // articleを修正
+                    $article = substr($article, 2);
+                break;
+
+                // 万が一、異常なデータが入ってきた場合はFALSE
+                default :
+                    return FALSE;
+            }
+        }
+    }
+
+    // 作成した情報を返す
+    $filterarticle = $pre_article;
+
+    return TRUE;
+}
+
+/*********************************************************
+ * reflect_filter_data
+ *
+ * フィルタの画面への反映
+ *
+ * [引数]
+ *         $ldap         LDAPから取得したオーダーの値
+ *         $filterorder  解析結果
+ * [返り値]
+ *         TRUE     正常
+ *         FALSE    異常
+ *
+ **********************************************************/
+function reflect_filter_data($filterorder, $filterarticle, &$subloop)
+{
+    global $web_conf;
+    global $url_data;
+
+    // オーダーを元に作成していく
+    foreach ($filterorder as $order_val) {
+
+        $preloop = array();
+
+        // オーダーから得たIDが存在しない場合は初期表示
+        if (! isset($filterarticle[$order_val['filter_id']])) {
+            $id = $order_val['filter_id'];
+            $preloop["<<FILTER_ID>>"] = $id;
+
+            // 全て転送ラジオ
+            $preloop["<<ALL_FORWARD>>"] = "checked";
+
+            // 詳細設定ラジオ
+            $preloop["<<DETAIL_FORWARD>>"] = "";
+
+            // 送信者設定
+            $preloop["<<FORWARD_CHECK>>"] = "";
+            $preloop["<<FORWARD_TEXT>>"] = "";
+            $preloop["<<FORWARD_MATCH>>"] = "selected";
+            $preloop["<<FORWARD_INCLUDE>>"] = "";
+            $preloop["<<FORWARD_NOT_INC>>"] = "";
+            $preloop["<<FORWARD_EMPTY>>"] = "";
+
+            // 件名設定
+            $preloop["<<SUBJECT_CHECK>>"] = "";
+            $preloop["<<SUBJECT_TEXT>>"] = "";
+            $preloop["<<SUBJECT_MATCH>>"] = "selected";
+            $preloop["<<SUBJECT_INCLUDE>>"] = "";
+            $preloop["<<SUBJECT_NOT_INC>>"] = "";
+            $preloop["<<SUBJECT_EMPTY>>"] = "";
+
+            // 宛先設定
+            $preloop["<<RECIPT_CHECK>>"] = "";
+            $preloop["<<RECIPT_TEXT>>"] = "";
+            $preloop["<<RECIPT_MATCH>>"] = "selected";
+            $preloop["<<RECIPT_INCLUDE>>"] = "";
+            $preloop["<<RECIPT_NOT_INC>>"] = "";
+            $preloop["<<RECIPT_EMPTY>>"] = "";
+
+            // 転送先、メールの処理
+            $preloop["<<TRANSFER_ADDR>>"] = "";
+            $preloop["<<MAIL_LEAVE>>"] = "selected";
+            $preloop["<<MAIL_DEL>>"] = "";
+        } else {
+
+            // タグの初期化（全て転送の場合もこの値）
+            // filter id
+            $id = $order_val['filter_id'];
+            $preloop["<<FILTER_ID>>"] = $id;
+
+            // 全て転送ラジオ
+            $preloop["<<ALL_FORWARD>>"] = "checked";
+
+            // 詳細設定ラジオ
+            $preloop["<<DETAIL_FORWARD>>"] = "";
+
+            // 送信者チェック
+            $preloop["<<FORWARD_CHECK>>"] = "";
+
+            // 送信者入力欄
+            $preloop["<<FORWARD_TEXT>>"] = "";
+
+            // 送信者処理
+            $preloop["<<FORWARD_MATCH>>"] = "selected";
+            $preloop["<<FORWARD_INCLUDE>>"] = "";
+            $preloop["<<FORWARD_NOT_INC>>"] = "";
+            $preloop["<<FORWARD_EMPTY>>"] = "";
+
+            // 件名チェック
+            $preloop["<<SUBJECT_CHECK>>"] = "";
+
+            // 件名入力欄
+            $preloop["<<SUBJECT_TEXT>>"] = "";
+
+            // 件名処理
+            $preloop["<<SUBJECT_MATCH>>"] = "selected";
+            $preloop["<<SUBJECT_INCLUDE>>"] = "";
+            $preloop["<<SUBJECT_NOT_INC>>"] = "";
+            $preloop["<<SUBJECT_EMPTY>>"] = "";
+
+            // 宛先チェック
+            $preloop["<<RECIPT_CHECK>>"] = "";
+
+            // 宛先入力欄
+            $preloop["<<RECIPT_TEXT>>"] = "";
+
+            // 宛先処理
+            $preloop["<<RECIPT_MATCH>>"] = "selected";
+            $preloop["<<RECIPT_INCLUDE>>"] = "";
+            $preloop["<<RECIPT_NOT_INC>>"] = "";
+            $preloop["<<RECIPT_EMPTY>>"] = "";
+
+
+            // どれか一つでも無効以外が選ばれていたら詳細設定あり
+            if ($filterarticle[$id][FROM_TERM] !== INVALID_TERM ||
+                $filterarticle[$id][SUBJECT_TERM] !== INVALID_TERM ||
+                $filterarticle[$id][RECIPIENT_TERM] !== INVALID_TERM) {
+                // 全て転送ラジオ
+                $preloop["<<ALL_FORWARD>>"] = "";
+
+                // 詳細設定ラジオ
+                $preloop["<<DETAIL_FORWARD>>"] = "checked";
+            }
+
+            // 送信者設定
+            // 無効以外はチェックボックスチェック
+            if ($filterarticle[$id][FROM_TERM] !== INVALID_TERM) {
+                $preloop["<<FORWARD_CHECK>>"] = "checked";
+            }
+
+            // 文字列があれば反映
+            if (isset($filterarticle[$id][FROM_FLAG])) {
+                $preloop["<<FORWARD_TEXT>>"] =
+                               escape_html($filterarticle[$id][FROM_FLAG]);
+            }
+
+            // 処理のセレクトボックスを反映
+            // を含む場合
+            if ($filterarticle[$id][FROM_TERM] === INCLUDE_TERM) {
+                $preloop["<<FORWARD_MATCH>>"] = "";
+                $preloop["<<FORWARD_INCLUDE>>"] = "selected";
+                $preloop["<<FORWARD_NOT_INC>>"] = "";
+                $preloop["<<FORWARD_EMPTY>>"] = "";
+
+            // を含まない場合
+            } elseif ($filterarticle[$id][FROM_TERM] === NOT_INCLUDE_TERM) {
+                $preloop["<<FORWARD_MATCH>>"] = "";
+                $preloop["<<FORWARD_INCLUDE>>"] = "";
+                $preloop["<<FORWARD_NOT_INC>>"] = "selected";
+                $preloop["<<FORWARD_EMPTY>>"] = "";
+
+            // が空である場合
+            } elseif ($filterarticle[$id][FROM_TERM] === EMPTY_TERM) {
+                $preloop["<<FORWARD_MATCH>>"] = "";
+                $preloop["<<FORWARD_INCLUDE>>"] = "";
+                $preloop["<<FORWARD_NOT_INC>>"] = "";
+                $preloop["<<FORWARD_EMPTY>>"] = "selected";
+            }
+
+            // 件名設定
+            // 無効以外はチェックボックスチェック
+            if ($filterarticle[$id][SUBJECT_TERM] !== INVALID_TERM) {
+                $preloop["<<SUBJECT_CHECK>>"] = "checked";
+            }
+
+            // 文字列があれば反映
+            if (isset($filterarticle[$id][SUBJECT_FLAG])) {
+                $preloop["<<SUBJECT_TEXT>>"] =
+                            escape_html($filterarticle[$id][SUBJECT_FLAG]);
+            }
+
+            // 処理のセレクトボックスを反映
+            // を含む場合
+            if ($filterarticle[$id][SUBJECT_TERM] === INCLUDE_TERM) {
+                $preloop["<<SUBJECT_MATCH>>"] = "";
+                $preloop["<<SUBJECT_INCLUDE>>"] = "selected";
+                $preloop["<<SUBJECT_NOT_INC>>"] = "";
+                $preloop["<<SUBJECT_EMPTY>>"] = "";
+
+            // を含まない場合
+            } elseif ($filterarticle[$id][SUBJECT_TERM] === NOT_INCLUDE_TERM) {
+                $preloop["<<SUBJECT_MATCH>>"] = "";
+                $preloop["<<SUBJECT_INCLUDE>>"] = "";
+                $preloop["<<SUBJECT_NOT_INC>>"] = "selected";
+                $preloop["<<SUBJECT_EMPTY>>"] = "";
+
+            // が空である場合
+            } elseif ($filterarticle[$id][SUBJECT_TERM] === EMPTY_TERM) {
+                $preloop["<<SUBJECT_MATCH>>"] = "";
+                $preloop["<<SUBJECT_INCLUDE>>"] = "";
+                $preloop["<<SUBJECT_NOT_INC>>"] = "";
+                $preloop["<<SUBJECT_EMPTY>>"] = "selected";
+            }
+
+            // 宛先設定
+            // 無効以外はチェックボックスチェック
+            if ($filterarticle[$id][RECIPIENT_TERM] !== INVALID_TERM) {
+                $preloop["<<RECIPT_CHECK>>"] = "checked";
+            } else {
+                $preloop["<<RECIPT_CHECK>>"] = "";
+            }
+
+            // 文字列があれば反映
+            if (isset($filterarticle[$id][RECIPIENT_FLAG])) {
+                $preloop["<<RECIPT_TEXT>>"] =
+                          escape_html($filterarticle[$id][RECIPIENT_FLAG]);
+            } else {
+                $preloop["<<RECIPT_TEXT>>"] = "";
+            }
+
+            // 処理のセレクトボックスを反映
+            // を含む場合
+            if ($filterarticle[$id][RECIPIENT_TERM] === INCLUDE_TERM) {
+                $preloop["<<RECIPT_MATCH>>"] = "";
+                $preloop["<<RECIPT_INCLUDE>>"] = "selected";
+                $preloop["<<RECIPT_NOT_INC>>"] = "";
+                $preloop["<<RECIPT_EMPTY>>"] = "";
+
+            // を含まない場合
+            } elseif ($filterarticle[$id][RECIPIENT_TERM] === 
+                                                            NOT_INCLUDE_TERM) {
+                $preloop["<<RECIPT_MATCH>>"] = "";
+                $preloop["<<RECIPT_INCLUDE>>"] = "";
+                $preloop["<<RECIPT_NOT_INC>>"] = "selected";
+                $preloop["<<RECIPT_EMPTY>>"] = "";
+
+            // が空である場合
+            } elseif ($filterarticle[$id][RECIPIENT_TERM] === EMPTY_TERM) {
+                $preloop["<<RECIPT_MATCH>>"] = "";
+                $preloop["<<RECIPT_INCLUDE>>"] = "";
+                $preloop["<<RECIPT_NOT_INC>>"] = "";
+                $preloop["<<RECIPT_EMPTY>>"] = "selected";
+            }
+
+            // 転送先、メールの処理
+            $preloop["<<TRANSFER_ADDR>>"] = "";
+            if (isset($filterarticle[$id][TRANS_ADDR])) {
+                $preloop["<<TRANSFER_ADDR>>"] =
+                              escape_html($filterarticle[$id][TRANS_ADDR]);
+            }
+
+            // サーバに残す/残さない
+            $preloop["<<MAIL_LEAVE>>"] = "selected";
+            $preloop["<<MAIL_DEL>>"] = "";
+            if ($filterarticle[$id][RECEIVED_MAIL] === RECEIVED_OFF) {
+                $preloop["<<MAIL_LEAVE>>"] = "";
+                $preloop["<<MAIL_DEL>>"] = "selected";
+            }
+        }
+
+        array_push($subloop, $preloop);
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_forward_data
+ *
+ * メール転送フォームの形式チェック
+ *
+ * [引数]
+ *         $post     postされた値
+ *         &$attrs   修正する属性を格納した配列
+ * [返り値]
+ *         TRUE      正常
+ *         FALSE     異常
+ *
+ **********************************************************/
+function check_forward_data($post, &$attrs)
+{
+    global $msgarr;
+    global $err_msg;
+    global $ldapdata;
+    global $web_conf;
+    global $url_data;
+
+    // 異常終了フラグ初期化
+    $break = 0;
+
+    $tmp_article = array();
+    $tmp_order = "";
+    $inval_id = array();
+    // idの数だけ繰り返す
+    foreach ($post['id'] as $id) {
+        // 入力値のチェック
+        // sender
+        if (isset($post["sender".$id]) && $post["sender".$id] !== "") {
+            $ret = check_forward_length($post["sender".$id]);
+            if ($ret === FALSE) {
+                $err_msg = $msgarr['25001'][SCREEN_MSG];
+                $break = SENDER_ERR;
+                break;
+            }
+        }
+
+        // subject
+        if (isset($post["subject".$id]) && $post["subject".$id] !== "") {
+            $ret = check_forward_length($post["subject".$id]);
+            if ($ret === FALSE) {
+                $err_msg = $msgarr['25002'][SCREEN_MSG];
+                $break = SUBJECT_ERR;
+                break;
+            }
+        }
+
+        // recipient
+        if (isset($post["recipient".$id]) && $post["recipient".$id] !== "") {
+            $ret = check_forward_length($post["recipient".$id]);
+            if ($ret === FALSE) {
+                $err_msg = $msgarr['25003'][SCREEN_MSG];
+                $break = RECIPIENT_ERR;
+                break;
+            }
+        }
+
+        // forward address
+        if (isset($post["forward_address".$id]) &&
+                  $post["forward_address".$id] !== "") {
+            $ret = check_mail_forward($post["forward_address".$id]);
+            if ($ret === FALSE) {
+                $break = FORWARD_ERR;
+                break;
+            }
+            $tmp_order .= "+" . $id . ":";
+
+        // 転送先が無い場合は登録しないので次のカラムへ進む
+        } else {
+            $tmp_order .= "-" . $id . ":";
+            $inval_id[] = $id;
+        }
+
+        // articleを作成する
+        $article = "";
+        $ret = make_save_article($post, $id, $article);
+        if ($ret === FALSE) {
+            $break = ARTICLE_ERR;
+            break;
+        }
+        // 作成したアーティクルを一時保存しておく
+        $tmp_article[$id] = $article;
+    }
+
+    // 入力値がエラーだった場合はエラー
+    if ($break !== 0) {
+        return FALSE;
+    }
+
+    // 最後の不要な":"を削除
+    $tmp_order = substr($tmp_order, 0, -1);
+
+    // 登録許可数を入力カラム数が超えていた場合はエラー
+    if ($web_conf[$url_data['script']]['forwardnum'] < count($tmp_article)) {
+        // 無効な要素だけ削除していく
+        foreach ($inval_id as $delete_id) {
+            // articleから削除
+            unset($tmp_article[$delete_id]);
+            // オーダーからも削除
+            $tmp_order = str_replace(":-".$delete_id, "", $tmp_order);
+        }
+
+        // 再度入力数カラム数を確認し、それでも超えていればエラー
+        if ($web_conf[$url_data['script']]['forwardnum'] < count($tmp_article)) {
+            $err_msg = $msgarr['25006'][SCREEN_MSG];
+            return FALSE;
+        }
+    }
+
+    // 登録データを整形する
+    $attrs["mailFilterArticle"] = array_merge($tmp_article);
+    //$attrs["mailFilterOrder"][0] = $tmp_order;
+    $attrs["mailFilterOrder"][0] = $tmp_order;
+
+    // web.confのForwardConfがONかつmailForwardingAddrが存在する場合は削除する
+    if ($web_conf[$url_data['script']]['forwardconf'] === FORWARD_ON &&
+        isset($ldapdata[0]["mailForwardingAddr"])) {
+        $attrs["mailForwardingAddr"] = array();
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * make_save_article()
+ *
+ * アーティクル整形関数
+ *
+ * [引数]
+ *      $post        ポストデータ
+ *      $id          対象ID
+ *      &$article    作成したarticle
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function make_save_article($post, $id, &$article)
+{
+    // 先頭のidを作成
+    $article = $id . ":";
+
+    // 送信者ルールの整形
+    // 送信者入力欄の情報を整形
+    if ($post["sender".$id] !== "") {
+        $article .= FROM_FLAG . strlen($post["sender".$id]) . ":" .
+                    $post["sender".$id];
+    }
+
+    // 送信者の処理を整形
+    // 送信者チェックボックスがoffか全て転送の場合は送信者無効フラグ
+    if (! isset($post["sender_enable".$id]) ||
+                $post["transfer_rule".$id] === INVALID_TERM) {
+        $article .= FROM_TERM . INVALID_TERM;
+    } else {
+        // 選ばれている処理を反映
+        // 〜と一致する
+        if ($post["sender_option".$id] === "0") {
+            $article .= FROM_TERM . MATCH_TERM;
+        } elseif ($post["sender_option".$id] === "1") {
+            $article .= FROM_TERM . INCLUDE_TERM;
+        } elseif ($post["sender_option".$id] === "2") {
+            $article .= FROM_TERM . NOT_INCLUDE_TERM;
+        } elseif ($post["sender_option".$id] === "3") {
+            $article .= FROM_TERM . EMPTY_TERM;
+        }
+    }
+
+    // 件名ルールの整形
+    // 件名入力欄の情報を整形
+    if ($post["subject".$id] !== "") {
+        $article .= SUBJECT_FLAG . strlen($post["subject".$id]) . ":" .
+                    $post["subject".$id];
+    }
+
+    // 件名の処理を整形
+    // 件名チェックボックスがoffか全て転送の場合は送信者無効フラグ
+    if (! isset($post["subject_enable".$id]) ||
+                $post["transfer_rule".$id] === INVALID_TERM) {
+        $article .= SUBJECT_TERM . INVALID_TERM;
+    } else {
+        // 選ばれている処理を反映
+        // 〜と一致する
+        if ($post["subject_option".$id] === "0") {
+            $article .= SUBJECT_TERM . MATCH_TERM;
+        } elseif ($post["subject_option".$id] === "1") {
+            $article .= SUBJECT_TERM . INCLUDE_TERM;
+        } elseif ($post["subject_option".$id] === "2") {
+            $article .= SUBJECT_TERM . NOT_INCLUDE_TERM;
+        } elseif ($post["subject_option".$id] === "3") {
+            $article .= SUBJECT_TERM . EMPTY_TERM;
+        }
+    }
+
+    // 宛先ルールの整形
+    // 宛先入力欄の情報を整形
+    if ($post["recipient".$id] !== "") {
+        $article .= RECIPIENT_FLAG . strlen($post["recipient".$id]) . ":" .
+                    $post["recipient".$id];
+    }
+
+    // 宛先の処理を整形
+    // 宛先チェックボックスがoffか全て転送の場合は送信者無効フラグ
+    if (! isset($post["recipient_enable".$id]) ||
+                $post["transfer_rule".$id] === INVALID_TERM) {
+        $article .= RECIPIENT_TERM . INVALID_TERM;
+    } else {
+        // 選ばれている処理を反映
+        // 〜と一致する
+        if ($post["recipient_option".$id] === "0") {
+            $article .= RECIPIENT_TERM . MATCH_TERM;
+        } elseif ($post["recipient_option".$id] === "1") {
+            $article .= RECIPIENT_TERM . INCLUDE_TERM;
+        } elseif ($post["recipient_option".$id] === "2") {
+            $article .= RECIPIENT_TERM . NOT_INCLUDE_TERM;
+        } elseif ($post["recipient_option".$id] === "3") {
+            $article .= RECIPIENT_TERM . EMPTY_TERM;
+        }
+    }
+
+    // 転送先の整形
+    $article .= TRANS_ADDR . strlen($post["forward_address".$id]) . ":" .
+                $post["forward_address".$id];
+
+    // 残す/残さないフラグの整形
+    $article .= RECEIVED_MAIL . $post["save".$id];
+
+    // base64エンコード処理
+    $article = base64_encode($article);
+    if ($article === FALSE) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * keep_post_forward_data()
+ *
+ * メール転送設定画面入力値保持関数
+ *
+ * [引数]
+ *      $post        ポストデータ
+ *      &$loop       loopタグ
+ *      $del_flag    deleteフラグ
+ * [返り値]
+ *      無し
+ **********************************************************/
+function keep_post_forward_data($post, &$loop, $del_flag)
+{
+    global $web_conf;
+    global $url_data;
+
+    // 得られたIDの数だけ繰り返す
+    foreach ($post['id'] as $id) {
+        // filter id
+        $tag_loop["<<FILTER_ID>>"] = $id;
+
+        // ラジオボタン
+        $tag_loop["<<ALL_FORWARD>>"] = "checked";
+        $tag_loop["<<DETAIL_FORWARD>>"] = "";
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        if ($post["transfer_rule".$id] === "1" && $_POST['filterId'] !== $id) {
+            $tag_loop["<<ALL_FORWARD>>"] = "";
+            $tag_loop["<<DETAIL_FORWARD>>"] = "checked";
+        }
+
+        // 送信者設定
+        // チェックボックス
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<FORWARD_CHECK>>"] = "";
+        if (isset($post["sender_enable".$id]) && $_POST['filterId'] !== $id) {
+            $tag_loop["<<FORWARD_CHECK>>"] = "checked";
+        }
+
+        // 送信者入力値
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<FORWARD_TEXT>>"] = "";
+        if ($_POST['filterId'] !== $id) {
+            $tag_loop["<<FORWARD_TEXT>>"] =
+                                         escape_html($post["sender".$id]);
+        }
+
+        // 送信者処理
+        $tag_loop["<<FORWARD_MATCH>>"] = "selected";
+        $tag_loop["<<FORWARD_INCLUDE>>"] = "";
+        $tag_loop["<<FORWARD_NOT_INC>>"] = "";
+        $tag_loop["<<FORWARD_EMPTY>>"] = "";
+
+        // 送信者含む
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        if ($post["sender_option".$id] === INCLUDE_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<FORWARD_MATCH>>"] = "";
+            $tag_loop["<<FORWARD_INCLUDE>>"] = "selected";
+
+        // 送信者含まない
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        } elseif ($post["sender_option".$id] === NOT_INCLUDE_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<FORWARD_MATCH>>"] = "";
+            $tag_loop["<<FORWARD_NOT_INC>>"] = "selected";
+
+        // 送信者空である
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        } elseif ($post["sender_option".$id] === EMPTY_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<FORWARD_MATCH>>"] = "";
+            $tag_loop["<<FORWARD_EMPTY>>"] = "selected";
+        }
+
+        // 件名設定
+        // 件名チェックボックス
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<SUBJECT_CHECK>>"] = "";
+        if (isset($post["subject_enable".$id]) && $_POST['filterId'] !== $id) {
+            $tag_loop["<<SUBJECT_CHECK>>"] = "checked";
+        }
+
+        // 件名入力値
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<SUBJECT_TEXT>>"] = "";
+        if ($_POST['filterId'] !== $id) {
+            $tag_loop["<<SUBJECT_TEXT>>"] =
+                                        escape_html($post["subject".$id]);
+        }
+
+        // 件名処理
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<SUBJECT_MATCH>>"] = "selected";
+        $tag_loop["<<SUBJECT_INCLUDE>>"] = "";
+        $tag_loop["<<SUBJECT_NOT_INC>>"] = "";
+        $tag_loop["<<SUBJECT_EMPTY>>"] = "";
+
+        // 含むが選択されていた場合
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        if ($post["subject_option".$id] === INCLUDE_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<SUBJECT_MATCH>>"] = "";
+            $tag_loop["<<SUBJECT_INCLUDE>>"] = "selected";
+
+        // 含まないが選択されていた場合
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        } elseif ($post["subject_option".$id] === NOT_INCLUDE_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<SUBJECT_MATCH>>"] = "";
+            $tag_loop["<<SUBJECT_NOT_INC>>"] = "selected";
+
+        // 空であるが選択されていた場合
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        } elseif ($post["subject_option".$id] === EMPTY_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<SUBJECT_MATCH>>"] = "";
+            $tag_loop["<<SUBJECT_EMPTY>>"] = "selected";
+        }
+
+        // 宛先設定
+        // 宛先チェックボックス
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<RECIPT_CHECK>>"] = "";
+        if (isset($post["recipient_enable".$id]) &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<RECIPT_CHECK>>"] = "checked";
+        }
+
+        // 宛先入力値
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<RECIPT_TEXT>>"] = "";
+        if ($_POST['filterId'] !== $id) {
+            $tag_loop["<<RECIPT_TEXT>>"] =
+                                      escape_html($post["recipient".$id]);
+        }
+
+        // 宛先処理
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<RECIPT_MATCH>>"] = "selected";
+        $tag_loop["<<RECIPT_INCLUDE>>"] = "";
+        $tag_loop["<<RECIPT_NOT_INC>>"] = "";
+        $tag_loop["<<RECIPT_EMPTY>>"] = "";
+
+        // 含むの場合
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        if ($post["recipient_option".$id] === INCLUDE_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<RECIPT_MATCH>>"] = "";
+            $tag_loop["<<RECIPT_INCLUDE>>"] = "selected";
+
+        // 含まないの場合
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        } elseif ($post["recipient_option".$id] === NOT_INCLUDE_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<RECIPT_MATCH>>"] = "";
+            $tag_loop["<<RECIPT_NOT_INC>>"] = "selected";
+
+        // 空であるの場合
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        } elseif ($post["recipient_option".$id] === EMPTY_INPUT &&
+                                                 $_POST['filterId'] !== $id) {
+            $tag_loop["<<RECIPT_MATCH>>"] = "";
+            $tag_loop["<<RECIPT_EMPTY>>"] = "selected";
+        }
+
+        // 転送先入力値
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<TRANSFER_ADDR>>"] = "";
+        if ($_POST['filterId'] !== $id) {
+            $tag_loop["<<TRANSFER_ADDR>>"] =
+                                escape_html($post["forward_address".$id]);
+        }
+
+        // 残す/残さない処理
+        // 削除ボタンが押されていないときはPOSTの値を保持
+        $tag_loop["<<MAIL_LEAVE>>"] = "selected";
+        $tag_loop["<<MAIL_DEL>>"] = "";
+        if ($post["save".$id] === "1" && $_POST['filterId'] !== $id) {
+            $tag_loop["<<MAIL_LEAVE>>"] = "";
+            $tag_loop["<<MAIL_DEL>>"] = "selected";
+        }
+
+        array_push($loop, $tag_loop);
+    }
+    // 作成したループタグよりも許可表示lineが少なかった場合は
+    // 数を合わせる（削除の場合は行なわない）
+    if ($del_flag === "") {
+        $max_num = $web_conf[$url_data['script']]['forwardnum'];
+        $data_num = count($loop);
+        for ($max_num; $max_num < $data_num; $max_num++) {
+            // 表示カラム数を調整
+            array_pop($loop);
+        }
+    }
+
+    return;
+}
+
+/*********************************************************
+ * delete_forward_input_value()
+ *
+ * メール転送設定画面入力値保持関数
+ *
+ * [引数]
+ *      $id     該当id
+ *      &$pre   削除後要素
+ * [返り値]
+ *      無し
+ **********************************************************/
+function delete_forward_input_value($id, &$pre)
+{
+
+    // 削除状態に書き換え
+    $pre["f"] = "0";
+    $pre["s"] = "0";
+    $pre["t"] = "0";
+
+    return;
+}
+
+/*********************************************************
+ * convert_forward_value()
+ *
+ * メール転送設定画面入力値保持関数
+ *
+ * [引数]
+ *      $id      該当id
+ *      &$loop   作成loopタグ
+ * [返り値]
+ *      無し
+ **********************************************************/
+function convert_forward_value($id, &$loop)
+{
+    global $ldapdata;
+
+    // filter id
+    $tag_loop["<<FILTER_ID>>"] = $id;
+
+
+    // 全て転送ラジオ
+    $tag_loop["<<ALL_FORWARD>>"] = "checked";
+    // 詳細設定ラジオ
+    $tag_loop["<<DETAIL_FORWARD>>"] = "";
+    // 送信者設定
+    $tag_loop["<<FORWARD_CHECK>>"] = "";
+    $tag_loop["<<FORWARD_TEXT>>"] = "";
+    $tag_loop["<<FORWARD_MATCH>>"] = "selected";
+    $tag_loop["<<FORWARD_INCLUDE>>"] = "";
+    $tag_loop["<<FORWARD_NOT_INC>>"] = "";
+    $tag_loop["<<FORWARD_EMPTY>>"] = "";
+    // 件名設定
+    $tag_loop["<<SUBJECT_CHECK>>"] = "";
+    $tag_loop["<<SUBJECT_TEXT>>"] = "";
+    $tag_loop["<<SUBJECT_MATCH>>"] = "selected";
+    $tag_loop["<<SUBJECT_INCLUDE>>"] = "";
+    $tag_loop["<<SUBJECT_NOT_INC>>"] = "";
+    $tag_loop["<<SUBJECT_EMPTY>>"] = "";
+    // 宛先設定
+    $tag_loop["<<RECIPT_CHECK>>"] = "";
+    $tag_loop["<<RECIPT_TEXT>>"] = "";
+    $tag_loop["<<RECIPT_MATCH>>"] = "selected";
+    $tag_loop["<<RECIPT_INCLUDE>>"] = "";
+    $tag_loop["<<RECIPT_NOT_INC>>"] = "";
+    $tag_loop["<<RECIPT_EMPTY>>"] = "";
+
+    // 転送先, 残す/残さない処理
+    $tag_loop["<<TRANSFER_ADDR>>"] = "";
+    $tag_loop["<<MAIL_LEAVE>>"] = "";
+    $tag_loop["<<MAIL_DEL>>"] = "selected";
+    foreach ($ldapdata[0]['mailForwardingAddr'] as $mailaddr) {
+        // ldapに登録されているメールアドレスと異なる物を取得
+        if ($mailaddr !== $ldapdata[0]['mail'][0]) {
+            $tag_loop["<<TRANSFER_ADDR>>"] = $mailaddr;
+
+        // メールアドレスが一致した場合は残すフラグを立てる
+        } else {
+            $tag_loop["<<MAIL_LEAVE>>"] = "selected";
+            $tag_loop["<<MAIL_DEL>>"] = "";
+        }
+    }
+
+    array_push($loop, $tag_loop);
+
+    return;
+}
+
+/*********************************************************
+ * mod_user
+ *
+ * ユーザ情報の修正
+ *
+ * [引数]
+ *          $data  ユーザ情報の格納された連想配列
+ * [返り値]
+ *          TRUE   正常
+ *          FALSE  エラー
+ *
+ **********************************************************/
+function mod_user_forward($data)
+{
+    global $web_conf;
+    global $url_data;
+    global $ldapdata;
+    global $userdn;
+
+    // LDAPデータの更新
+    //$ret = LDAP_mod_entry($userdn, $attrs);
+    $ret = LDAP_mod_entry($userdn, $data);
+    if ($ret !== LDAP_OK && $ret != LDAP_ERR_NOATTR) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_csv_order
+ *
+ * csvファイル用のオーダーチェック関数
+ * エラーメッセージは呼び出し元でセットする
+ *
+ * [引数]
+ *          $order  メールフィルタオーダー
+ * [返り値]
+ *          TRUE   正常
+ *          FALSE  エラー
+ *
+ **********************************************************/
+function check_csv_order($order)
+{
+
+    // 文字列長チェック
+    if (strlen($order) > ORDER_CSV_LENGTH) {
+        return FALSE;
+    }
+
+    // 許可文字チェック（数字と+-:以外が含まれていればエラー）
+    $num = "0123456789";
+    $sym = "+-:";
+    $allow_letter = $num . $sym;
+
+    if (strspn($order, $allow_letter) !== strlen($order)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_csv_article
+ *
+ * csvファイル用のアーティクルチェック関数
+ * エラーメッセージは呼び出し元でセットする
+ *
+ * [引数]
+ *          $article  メールフィルタオーダー
+ * [返り値]
+ *          TRUE   正常
+ *          FALSE  エラー
+ *
+ **********************************************************/
+function check_csv_article($article)
+{
+
+    // ":"で分解
+    $exp_art = explode(":", $article);
+
+    // 要素数文チェックを繰り返す
+    foreach ($exp_art as $piece_art) {
+        // 文字列長チェック
+        if (strlen($piece_art) > ARTICLE_CSV_LENGTH) {
+            return FALSE;
+        }
+
+        // base64デコードが失敗すればエラー
+        $ret = base64_decode($piece_art, TRUE);
+        if ($ret === FALSE) {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+?>

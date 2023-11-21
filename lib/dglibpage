@@ -1,0 +1,940 @@
+<?php
+
+/*
+ * postLDAPadmin
+ *
+ * Copyright (C) 2006,2007 DesigNET, INC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
+/***********************************************************
+ * ページクラス
+ *
+ * $RCSfile$
+ * $Revision$
+ * $Date$
+ **********************************************************/
+
+/* 各行の最大タブ数 */
+define("MAX_TAB_NUM", 6);
+
+/* 各行の最大メニューボタン数 */
+define("MAX_MENU_NUM", 3);
+
+/* メニューボタンの画像数 */
+define("ICON_NUM", 6);
+
+/* スタイルシートの名前 */
+define("STYLE_CSS", "style.css");
+
+/* ログアウトファイルの名前 */
+define("LOGOUT", "logout.php");
+
+/* メニューボタン画像の名前(番号を省いたもの) */
+define("ICON_IMAGE", "images/%s%d.png");
+
+/* 空白画像の名前 */
+define("SPACER_IMAGE", "images/spacer.gif");
+
+/* タブの画像設定 */
+define("ON_IMAGE", "on.png");
+define("OFF_IMAGE", "off.png");
+
+/* 表示modeの設定 */
+define("MENU", 0);
+define("CONTENT", 1);
+
+/* テンプレートディレクトリ */
+define("TMPLDIR", "tmpl/");
+
+/* システムエラーテンプレート */
+define("SYSERR_TEMPLATE", "system_err.tmpl");
+
+/* ループ開始タグ */
+define("STARTTAG", "<<STARTLOOP>>");
+
+/* ループ終了タグ */
+define("ENDTAG", "<<ENDLOOP>>");
+
+/*----------------------------------------------------------
+ * HTTP ヘッダーの出力
+ *--------------------------------------------------------*/
+function output_http_header()
+{
+
+    header("Cache-Control: no-cache, must-revalidate");	/* HTTP 1.1 */
+    header("Pragma: no-cache");	/* HTTP 1.0 */
+    header("Content-Type: text/html; charset=EUC-JP");
+
+}
+
+/*----------------------------------------------------------
+ * ヘッダー部の表示
+ *--------------------------------------------------------*/
+function display_header()
+{
+    global $web_conf;
+    $title_name = "";
+
+    /* 設定ファイルが読み込めた場合 */
+    if (isset($web_conf["global"]["titlename"]) === TRUE) {
+
+        /* タイトル名を変数に代入 */
+        $title_name = escape_html($web_conf["global"]["titlename"]);
+    }
+
+    print <<<EOD
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title>$title_name</title>
+</head>
+
+EOD;
+
+}
+
+/*----------------------------------------------------------
+ * フッター部の表示
+ *--------------------------------------------------------*/
+function display_footer()
+{
+
+    print <<<EOD
+<table class="footer">
+  <td class="footer"></td>
+</table>
+</body>
+</html>
+EOD;
+
+}
+
+/***********************************************************
+ * dgp_location()
+ *
+ * ロケーションを行う
+ *
+ * [引数]
+ *      $url
+ * [返り値]
+ *      なし
+ ************************************************************/
+function dgp_location($url, $msg = null)
+{
+    global $sesskey;
+
+    /* セッション */
+    $hidden = "<input type=\"hidden\" name=\"sk\" value=\"" .
+               $sesskey . "\">";
+
+    /* メッセージ */
+    $message = "";
+    if (!is_null($msg)) {
+        $message = "<input type=\"hidden\" " .
+                              "name=\"msg\" value=\"$msg\">";
+    }
+
+    /* HTML作成 */
+    display_header();
+    print <<<EOD
+<script type="text/javascript">
+<!--
+function msgConfirm(msg) {
+        return(window.confirm(msg));
+}
+
+function dgpSubmit(url) {
+    document.common.action = url;
+    document.common.submit();
+}
+// -->
+</script>
+<body onload="dgpSubmit('$url')">
+処理中...
+<form method="post" name="common">
+    $hidden
+    $message
+</form>
+</body>
+</html>
+EOD;
+    exit;
+
+}
+/***********************************************************
+ * err_location()
+ *
+ * ログイン画面にロケーションを行う
+ *
+ * [引数]
+ *      $url 
+ * [返り値]
+ *      なし
+ ************************************************************/
+function err_location($url)
+{
+    global $topdir;
+
+    /* 現在開いているページのスクリプト名、タブ、メニュー取得  */
+    url_search();
+
+    header("Location: ". $topdir . $url);
+}
+
+/***********************************************************
+ * get_tab()
+ *
+ * タブを表示するHTML文字列を返す
+ *
+ * [引数]
+ *      なし
+ * [返り値]
+ *      $tab_html   HTML文字列
+ ************************************************************/
+function get_tab()
+{
+    global $url_data;
+    global $tab_conf;
+    global $topdir;
+
+    /* タブの数を初期化 */
+    $tabs = 0;
+
+    /* スクリプト名を取り出す */
+    foreach($tab_conf as $script => $value) {
+        $i = 0;
+
+        /* 各タブのパス生成 */
+        foreach($value as $tab_key => $tab_value) {
+            $tmp_tab =  key($value[$i++]);
+            $url =  $topdir . $script . "/" . $tmp_tab . "/";
+
+            /* ハイライトの画像 */
+            if ($url_data["tab"] == $tmp_tab && $url_data["script"] == $script) {
+                $tab[$tabs++] = array("img" => $url. ON_IMAGE,
+                                      "url" => $url);
+            } else {
+                $tab[$tabs++] = array("img" => $url. OFF_IMAGE,
+                                      "url" => $url);
+            }
+        }
+    }
+
+    /* タブ数を数える */
+    $num = count($tab);
+
+    /* タブのHTMLを初期化 */
+    $tab_html = "";
+
+    /* タブが1以下の際タブを表示しない */
+    if ($num > 1) {
+        /* タブの表示 */
+        $tab_html .= "\n<table class=\"tab\">\n";
+        for ($i = 0; $i < $tabs; $i++) {
+            /* 一番左 */
+            if (($i % MAX_TAB_NUM) == 0) {
+                $tab_html .= "  <tr>\n";
+            }
+
+            $url = $tab[$i]["url"];
+
+            $tab_html .= "    <td class=\"tab\">";
+            $tab_html .= "<a href=\"#\" onClick=\"dgpSubmit('$url')\">";
+            $tab_html .= "<img class=\"tab\" src=\"";
+            $tab_html .= $tab[$i]["img"];
+            $tab_html .= "\"></a></td>\n";
+
+            /* 一番右 */
+            if ($i == (MAX_TAB_NUM - 1)) {
+                $tab_html .= "  </tr>\n";
+            }
+        }
+        if ($i != MAX_TAB_NUM) {
+            $tab_html .= "  </tr>\n";
+        }
+        $tab_html .= "</table>\n";
+    }
+
+    return $tab_html;
+}
+
+/***********************************************************
+ * get_topic()
+ *
+ * パンくずを表示するHTML文字列を返す
+ *
+ * [引数]
+ *      なし
+ * [返り値]
+ *      $topic_html   HTML文字列
+ ************************************************************/
+function get_topic()
+{
+    global $tab_conf;
+    global $menu_conf;
+    global $url_data;
+
+    /* 現在開いているページのスクリプト名、タブ、メニュー取得  */
+    $script = $url_data["script"];
+    $tab = $url_data["tab"];
+    $menu = $url_data["menu"];
+
+    /* パンくずのHTMLを初期化 */
+    $topic_html = "<table class=\"head\"><tr><td class=\"topic\">";
+
+    /* ログイン画面の場合 */
+    if ($tab == "") {
+        $topic_html .= "&nbsp;";
+
+    /* タブ画面の場合 */
+    } elseif ($menu == ""){
+        /* タブ名を取り出す */
+        $count = count($tab_conf[$script]);
+
+        /* タブファイルの中身から検索 */
+        for ($i = 0; $i < $count; $i++) {
+            $key = key($tab_conf[$script][$i]);
+
+            /* 現在のタブと一致するものを取り出す */
+            if ($key == $url_data["tab"]) {
+                $topic_html .= $tab_conf[$script][$i][$key];
+                break;
+            }
+        }
+
+    /* メニュー画面の場合 */
+    } else {
+        /* タブの数を数える */
+        $count = count($tab_conf[$script]);
+
+        /* タブファイルの中から検索 */
+        for ($i = 0; $i < $count; $i++) {
+            $key = key($tab_conf[$script][$i]);
+
+            /* 現在のタブと一致するものを取り出す */
+            if ($key == $tab) {
+                $topic_html .= "<a href=\"#\" onClick=\"dgpSubmit('../')\">";
+                $topic_html .= $tab_conf[$script][$i][$key];
+                $topic_html .= "</a>";
+                break;
+            }
+        }
+
+        $topic_html .= "&nbsp;&gt;&nbsp;";
+
+        /* メニューの数を数える */
+        $count = count($menu_conf[$script][$tab]);
+
+        /* タブファイルの中から検索 */
+        for ($i = 0; $i < $count; $i++) {
+            $key = key($menu_conf[$script][$tab][$i]);
+
+            /* 現在のタブと一致するものを取り出す */
+            if ($key == $menu) {
+                $topic_html .= $menu_conf[$script][$tab][$i][$key];
+                break;
+            }
+        }
+    }
+
+    $topic_html .= "</td></tr></table>";
+
+    return $topic_html;
+}
+
+/*********************************************************
+ * display()
+ * テンプレートファイルを読み込みタグ置換を行う
+ *
+ * [引数]
+ *      $template     テンプレートファイル
+ *      $tag          置き換えるタグ
+ *        形式: $tag[<<TAG>>] = "置き換える文字列"
+ *
+ *      $looptag      ループタグ
+ *        形式: $looptag[0][<<LOOPTAG>>] = "ループ1"
+ *              $looptag[1][<<LOOPTAG>>] = "ループ2"
+ *
+ *      $starttag     ループ開始タグ
+ *      $endtag       ループ終了タグ
+ * [返り値]
+ *      なし
+ **********************************************************/
+function display($template, $tag, $looptag, $starttag, $endtag)
+{
+    global $err_msg;
+    global $log_msg;
+    global $basedir;
+
+     /* テンプレートファイルパス整形 */
+     $template = $basedir . TMPLDIR . $template;
+
+     /* テンプレートファイルの読み込み */
+     $ret = read_template($template, $html);
+     if ($ret === FALSE) {
+         return FALSE;
+     }
+
+     /* テンプレートファイルの置換 */
+     $print_html = replace_template_tag($html, $tag, $looptag,
+                                        $starttag, $endtag);
+     /* HTML 表示 */
+     print $print_html;
+}
+
+/*********************************************************
+ * set_tab
+ *
+ * タブ用タグの作成
+ *
+ * [引数]
+ *       $tab_tag            タブ用タグの作成
+ *
+ * [返り値]
+ *       なし
+ **********************************************************/
+function set_tab(&$tab_tag)
+{
+    global $url_data;
+    global $tab_conf;
+    global $topdir;
+
+    /* tab_confが空のとき、何も表示しない */
+    if (isset($tab_conf) === FALSE) {
+        return;
+    }
+
+    /* タブの数を初期化 */
+    $tabs = 0;
+
+    /* スクリプト名を取り出す */
+    foreach($tab_conf as $script => $value) {
+        foreach($value as $tab_key => $tab_value) {
+            /* パス作成のためタブ名を取り出す */
+            $tmp_tab =  key($tab_value);
+            /* タブのURL作成 */
+            $url =  $topdir . $script . "/" . $tmp_tab . "/";
+
+            /* タブのURLとアクティブかどうかの情報、表示名をタグに入れる */
+            if ($url_data["tab"] == $tmp_tab) {
+                $tab_tag[$tabs]["<<ACTIVE>>"] = "active";
+            } else {
+                $tab_tag[$tabs]["<<ACTIVE>>"] = "";
+            }
+
+            $tab_tag[$tabs]["<<URL>>"] = $url;
+            $tab_tag[$tabs]["<<NAME>>"] = $tab_value[$tmp_tab];
+
+            $tabs++;
+        }
+    }
+}
+
+/*********************************************************
+ * set_menu
+ *
+ * メニュー用タグの作成
+ *
+ * [引数]
+ *       $menu_tag            メニュー用タグ
+ *
+ * [返り値]
+ *       なし
+ **********************************************************/
+function set_menu(&$menu_tag)
+{
+    global $url_data;
+    global $menu_conf;
+    global $topdir;
+    $menu_tag = array();
+
+    /* メニューがないとき、メニュータグを空で置き換える */
+    if(isset($menu_conf[$url_data["script"]][$url_data["tab"]]) === FALSE) {
+        return;
+    }
+
+    /* タブ数の初期化 */
+    $tabs = 0;
+
+    $menu_html = "";
+    foreach ($menu_conf[$url_data["script"]][$url_data["tab"]] as $key_num
+                                                               => $value_arr) {
+
+        /* メニューのパス名を取得 */
+        $tmp_name = key($value_arr);
+        /* スクリプト名を取得 */
+        $script_key = key($menu_conf);
+
+        /* メニューのパス作成 */
+        $url =  $topdir . $url_data["script"] . "/" . $url_data["tab"]
+             ."/" . $tmp_name . "/";
+
+        /* メニューの表示名取得 */
+        $menu_name = $value_arr[$tmp_name];
+
+        /* メニューがアクティブかどうか、URL、メニューの表示名をタグに入れる */
+        if ($tmp_name == $url_data["menu"]) {
+            $menu_tag[$tabs]["<<ACTIVE>>"] = "active";
+        } else {
+            $menu_tag[$tabs]["<<ACTIVE>>"] = "";
+        }
+        $menu_tag[$tabs]["<<URL>>"] = $url;
+        $menu_tag[$tabs]["<<NAME>>"] = $menu_name;
+
+        $tabs++;
+    }
+
+    return $menu_html;
+}
+
+/*********************************************************
+ * replace_tab()
+ * タブの変換を行う
+ *
+ * [引数]
+ *      $html         置換を行うHTML
+ * [返り値]
+ *      $html        置換したHTML
+ **********************************************************/
+function replace_tab($html)
+{
+    $rest_html = $html;
+    $mod_html = "";
+    $starttag = "<<START_TAB>>";
+    $endtag   = "<<END_TAB>>";
+
+    set_tab($tab_tag);
+    while(1) {
+
+        /* ループ開始タグで分割 */
+        $dev_s = explode($starttag, $rest_html, 2);
+        $mod_html .= $dev_s[0];
+        if (isset($dev_s[1]) === FALSE || $dev_s[1] == "") {
+            /* ループ開始タグが見つからなかった場合 */
+            break;
+        }
+
+        /* ループ終了タグで分割 */
+        $dev_e = explode($endtag, $dev_s[1], 2);
+        if ($dev_e[1] == "") {
+            /* ループ終了タグが見つからなかった場合 */
+            $mod_html .= $starttag . $dev_s[1];
+            break;
+        }
+
+        /* ループ内のタグを変換 */
+        $loop_html = $dev_e[0];         // ループタグ内のHTML
+        foreach ($tab_tag as $key => $value) {
+            $str = change_template_tag($loop_html, $value);
+            $mod_html .= $str;
+
+        }
+
+        /* 残りを代入する */
+        $rest_html = $dev_e[1];
+    }
+
+    return $mod_html;
+}
+
+/*********************************************************
+ * replace_menu()
+ * メニュータブの変換を行う
+ *
+ * [引数]
+ *      $html         置換を行うHTML
+ * [返り値]
+ *      $html        置換したHTML
+ **********************************************************/
+function replace_menu($html)
+{
+    $rest_html = $html;
+    $mod_html = "";
+    $starttag = "<<START_MENU>>";
+    $endtag   = "<<END_MENU>>";
+
+    set_menu($menu_tag);
+    while(1) {
+
+        /* ループ開始タグで分割 */
+        $dev_s = explode($starttag, $rest_html, 2);
+        $mod_html .= $dev_s[0];
+        if (isset($dev_s[1]) === FALSE || $dev_s[1] == "") {
+            /* ループ開始タグが見つからなかった場合 */
+            break;
+        }
+
+        /* ループ終了タグで分割 */
+        $dev_e = explode($endtag, $dev_s[1], 2);
+        if ($dev_e[1] == "") {
+            /* ループ終了タグが見つからなかった場合 */
+            $mod_html .= $starttag . $dev_s[1];
+            break;
+        }
+
+        /* ループ内のタグを変換 */
+        $loop_html = $dev_e[0];         // ループタグ内のHTML
+        $loop_num = "";
+        if (isset($menu_tag)) {
+            $loop_num = count($menu_tag);   // ループする回数
+        }
+
+        /* ループタグがある分のみループする */
+        for ($i = 0; $loop_num > $i; $i++) {
+            $str = change_template_tag($loop_html, $menu_tag[$i]);
+            $mod_html .= $str;
+        }
+
+        /* 残りを代入する */
+        $rest_html = $dev_e[1];
+    }
+    return $mod_html;
+}
+
+/*********************************************************
+ * replace_template_tag()
+ * テンプレートタグの変換を行う
+ *
+ * [引数]
+ *      $html         置換を行うHTML
+ *      $tag          タグ情報が格納された連想配列
+ *      $looptag      ループタグにはさまれたタグ情報が格納されている
+ *      $starttag     ループ開始タグを示す文字列
+ *      $endtag       ループ終了タグを示す文字列
+ * [返り値]
+ *      $html        置換したHTML
+ **********************************************************/
+function replace_template_tag($html, $tag, $looptag, $starttag, $endtag)
+{
+
+    global $url_data;
+
+    /* ログイン画面を除いた全ての画面でメニューとタブの表示を行う */
+    if ($url_data["tab"] != "") {
+        $html = replace_tab($html);
+        $html = replace_menu($html);
+    }
+
+    /* ループタグの指定がない場合 */
+    if ($starttag == "" || $endtag == "") {
+        return change_template_tag($html, $tag);
+    }
+
+    /* ループタグある場合 */
+    $rest_html = $html;
+    $mod_html = "";
+
+    while(1) {
+
+        /* ループ開始タグで分割 */
+        $dev_s = explode($starttag, $rest_html, 2);
+        $mod_html .= $dev_s[0];
+        if (isset($dev_s[1]) === FALSE || $dev_s[1] == "") {
+            /* ループ開始タグが見つからなかった場合 */
+            break;
+        }
+
+        /* ループ終了タグで分割 */
+        $dev_e = explode($endtag, $dev_s[1], 2);
+        if ($dev_e[1] == "") {
+            /* ループ終了タグが見つからなかった場合 */
+            $mod_html .= $starttag . $dev_s[1];
+            break;
+        }
+
+        /* ループ内のタグを変換 */
+        $loop_html = $dev_e[0];         // ループタグ内のHTML
+        $loop_num = "";
+        if (isset($looptag)) {
+            $loop_num = count($looptag);   // ループする回数
+        }
+
+        /* ループタグがある分のみループする */
+        for ($i = 0; $loop_num > $i; $i++) {
+            $str = change_template_tag($loop_html, $looptag[$i]);
+            $mod_html .= $str;
+        }
+
+        /* 残りを代入する */
+        $rest_html = $dev_e[1];
+    }
+
+    /* ループタグ以外を置換 */
+    $mod_html = change_template_tag($mod_html, $tag);
+
+    return $mod_html;
+}
+
+/*********************************************************
+ * change_template_tag()
+ * テンプレートタグの置換を行う
+ *
+ * [引数]
+ *      $html         置換を行うHTML
+ *      $tag          タグ情報が格納された連想配列
+ * [返り値]
+ *      $html        置換したHTML
+ **********************************************************/
+function change_template_tag($html, $tag)
+{
+
+    /* タグがなければ未変換 */
+    if (count($tag) <= 0) {
+        return $html;
+    }
+
+    /* タグ置換 */
+    foreach($tag as $key => $value) {
+        $html = str_replace($key, $value, $html);
+    }
+
+    return $html;
+}
+
+/*********************************************************
+ * read_template()
+ * 指定されたテンプレートファイルを読み込む
+ *
+ * [引数]
+ *      $template     テンプレートファイルのパス
+ *      $html         テンプレートファイルの内容(参照渡し)
+ * [返り値]
+ *      TRUE          成功
+ *      FALSE         異常
+ **********************************************************/
+function read_template($template, &$html)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* ファイルの読込権チェック */
+    $ret = is_readable_file($template);
+    if ($ret === FALSE) {
+        return FALSE;
+    }
+
+    /* ファイル読込 */
+    $html = file_get_contents($template);
+    if ($html === FALSE) {
+        $err_msg = sprintf($msgarr['25001'][SCREEN_MSG], $template);
+        $log_msg = sprintf($msgarr['25001'][LOG_MSG], $template);
+        return FALSE;
+    }
+
+    return TRUE;
+
+}
+
+/*********************************************************
+ * syserr_display()
+ * システムエラー画面を表示する
+ *
+ * [引数]
+ *      なし
+ * [返り値]
+ *      なし
+ **********************************************************/
+function syserr_display()
+{
+    global $topdir;
+    global $sesskey;
+    global $err_msg;
+    global $web_conf;
+
+    /* タグ 設定 */
+    $tag["<<TITLE>>"] = "";
+    if (isset($web_conf["global"]["titlename"]) === TRUE) {
+        $tag["<<TITLE>>"] = $web_conf["global"]["titlename"];
+    }
+    if (empty($err_msg)) {
+        $tag["<<MESSAGE>>"] = "&nbsp;";
+    } else {
+        $tag["<<MESSAGE>>"] = $err_msg;
+    }
+    $tag["<<SK>>"] = "<input type=\"hidden\" name=\"sk\" value=\"" .
+                           $sesskey . "\">";
+    $tag["<<TOPDIR>>"]  = $topdir;
+    $tag["<<JAVASCRIPT>>"] = <<<EOD
+<script type="text/javascript">
+<!--
+function msgConfirm(msg) {
+        return(window.confirm(msg));
+}
+
+function dgpSubmit(url) {
+    document.common.action = url;
+    document.common.submit();
+}
+// -->
+</script>
+EOD;
+
+    /* HTML作成 */
+    display(SYSERR_TEMPLATE, $tag, array(), "", "");
+}
+
+/***********************************************************
+ * set_tag_common
+ *
+ * 共通で利用するタグをセット
+ *
+ * [引数]
+ *      $tag    タグ(参照渡し):
+ * [返り値]
+ *      TRUE    正常
+ ************************************************************/
+function set_tag_common(&$tag, $javascript = "")
+{
+    global $web_conf;
+    global $err_msg;
+    global $sesskey;
+
+    /* タイトル */
+    $tag["<<TITLE>>"] = $web_conf["global"]["titlename"];
+
+    /* エラーメッセージ */
+    if (empty($err_msg)) {
+        $tag["<<MESSAGE>>"] = "&nbsp;";
+    } else {
+        $tag["<<MESSAGE>>"] = $err_msg;
+    }
+
+    /* セッションタグ 設定 */
+    $tag["<<SK>>"] = "<input type=\"hidden\" name=\"sk\" value=\"" .
+                           $sesskey . "\">";
+
+    /* トピックタグ 設定 */
+    $tag["<<TOPIC>>"] = get_topic();
+
+    /* タブタグ 設定 */
+    $tag["<<TAB>>"] = get_tab();
+
+    /* JavaScript タグ 設定 */
+    $tag["<<JAVASCRIPT>>"] = <<<EOD
+<script type="text/javascript">
+<!--
+function msgConfirm(msg) {
+        return(window.confirm(msg));
+}
+
+function dgpSubmit(url) {
+    document.common.action = url;
+    document.common.submit();
+}
+$javascript
+// -->
+</script>
+EOD;
+
+    return TRUE;
+}
+
+/***********************************************************
+ * get_menu()
+ *
+ * メニューを表示するHTML文字列を返す
+ *
+ * [引数]
+ *      なし
+ * [返り値]
+ *      $menu_html   HTML文字列
+ ************************************************************/
+function get_menu()
+{
+    global $url_data;
+    global $menu_conf;
+    global $topdir;
+
+    /* メニューの個数の取得 */
+    $count = count($menu_conf[$url_data["script"]][$url_data["tab"]]);
+
+    /* セルの幅を設定 */
+    if ($count > MAX_MENU_NUM) {
+        /* メニューが二行にわたるとき */
+        $size = floor(100 / MAX_MENU_NUM);
+    } else {
+        /* メニューが一行ですむとき */
+        $size = floor(100 / $count);
+    }
+    $widthsize = $size . '%';
+
+    $menu_html = "\n            <table class=\"body\">\n";
+
+    /* メニューの数だけ繰り返す */
+    for ($i = 0; $i < $count; $i++) {
+
+        /* メニューのパス名を取得 */
+        $tmp_name = key($menu_conf[$url_data["script"]][$url_data["tab"]][$i]);
+
+        /* メニューのパス作成 */
+        $url = $tmp_name . "/";
+
+        /* メニュー名取得 */
+        $menu_name = $menu_conf[$url_data["script"]][$url_data["tab"]][$i][$tmp_name];
+
+        /* icon画像の番号取得 */
+        $number = $i % ICON_NUM;
+
+        /* 画像名を作成 */
+        $icon_name = sprintf(ICON_IMAGE, $url_data["tab"], $number);
+
+        /* icon画像までのパスを作成 */
+        $img_icon_path = $topdir . $icon_name;
+
+        /* 行頭のメニューには<tr>タブを挿入 */
+        if (($i % MAX_MENU_NUM) == 0) {
+            $menu_html .= "              <tr>\n";
+        }
+
+        $menu_html .= "                <td class=\"menu\" width=\"$widthsize\">";
+        $menu_html .= "<a href=\"#\" onClick=\"dgpSubmit('$url')\">";
+        $menu_html .= "<img class=\"menu\" src=\"";
+        $menu_html .= $img_icon_path;
+        $menu_html .= "\"><br>\n";
+        $menu_html .= $menu_name;
+        $menu_html .= "</a></td>\n";
+
+        /* 一番右 */
+        if ($i == (MAX_MENU_NUM - 1)) {
+            $menu_html .= "              </tr>\n";
+        }
+    }
+
+    /* menuが二行以上になったとき配置 */
+    if ($count > MAX_MENU_NUM) {
+        /* 残ったテーブルのセルには空白を配置 */
+        for ($j = $i; $j % MAX_MENU_NUM != 0;  $j++) {
+            $menu_html .= "                <td class=\"menu\" width=\"$widthsize\">";
+            $menu_html .= "<img src=\"";
+            $menu_html .= $topdir . SPACER_IMAGE;
+            $menu_html .= "\"></td>\n";
+        }
+    }
+
+    /* 各行の終わりには</tr>タブを挿入 */
+    if ($i != MAX_MENU_NUM) {
+        $menu_html .= "              </tr>\n";
+    }
+    $menu_html .= "            </table>\n";
+
+    return $menu_html;
+}
+?>

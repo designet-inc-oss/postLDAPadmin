@@ -1,0 +1,49 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Content-Type" content="text/html; charset=EUC-JP">
+<title><<TITLE>></title>
+<<JAVASCRIPT>>
+<link rel="stylesheet" type="text/css" href="../../../postldapadmin.css">
+</head>
+<body topmargin="0" leftmargin="0">
+<div class="title">
+  <form method="post" action="../../../logout.php">
+    <<SK>>
+    <input type="submit" value="" name="logout" class="logout_btn">
+  </form>
+</div>
+<div class="topic"><<TOPIC>></div>
+<div class="message"><<MESSAGE>></div>
+<<TAB>>
+<div class="frame">
+  <form method="post" action="index.php" name="ml">
+    <table>
+      <tr>
+        <td>
+        <select size="10" name="mladdr">
+        <<MLADDRS>>
+        </select>
+        </td>
+        <td valign="bottom">
+          <input type="submit" name="ml_add" value="" class="ml_add_btn">
+          <br>
+          <input type="submit" name="del" value="" class="ml_del_btn"onClick="return msgConfirm('選択したメーリングリストアドレスを削除します。\nよろしいですか？')">
+        </td>
+      </tr>
+    </table>
+    <br>
+    <input type="text" size="40" maxlength="32" name="newml" value="<<NEWML>>">
+    <span class="maildomain">@<<MLDOMAIN>></span>
+    <input type="submit" name="add" value="" class="new_add_btn">
+    <<SK>>
+  </form>          
+</div>
+<form method="post" name="common">
+  <<SK>>
+</form>
+<div class="footer"></div>
+</body>
+</html>

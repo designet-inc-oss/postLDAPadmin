@@ -1,0 +1,25 @@
+dn: cn=postldapadmin,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: postldapadmin
+olcAttributeTypes: {0}( 1.3.6.1.4.1.15774.1.10.1.2.1 NAME 'quotaSize' DESC 'qu
+ ota size' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40{32} 
+ SINGLE-VALUE )
+olcAttributeTypes: {1}( 1.3.6.1.4.1.15774.1.10.1.2.2 NAME 'mailAlias' DESC 'ma
+ il alias' EQUALITY caseIgnoreIA5Match SUBSTR caseIgnoreSubstringsMatch SYNTAX
+  1.3.6.1.4.1.1466.115.121.1.26{256} )
+olcAttributeTypes: {2}( 1.3.6.1.4.1.15774.1.10.1.2.3 NAME 'mailDirectory' DESC
+  'mail directory' EQUALITY caseIgnoreIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121
+ .1.26{256} SINGLE-VALUE )
+olcAttributeTypes: {3}( 1.3.6.1.4.1.15774.1.10.1.2.4 NAME 'mailForwardingAddr'
+  DESC 'mail forwarding address' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.
+ 1466.115.121.1.40{256} )
+olcAttributeTypes: {4}( 1.3.6.1.4.1.15774.1.1.3.1.1 NAME 'mailFilterOrder' DES
+ C 'mail filter order' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.1
+ 21.1.40{128} )
+olcAttributeTypes: {5}( 1.3.6.1.4.1.15774.1.1.3.1.2 NAME 'mailFilterArticle' D
+ ESC 'mail filter article' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.1
+ 15.121.1.40{1024} )
+olcObjectClasses: {0}( 1.3.6.1.4.1.15774.1.10.1.1.1 NAME 'postLdapAdmin' DESC 
+ 'postLdapAdmin user' SUP top AUXILIARY MUST ( uid $ mail ) MAY ( userPassword
+  $ quotaSize $ mailAlias $ mailDirectory $ mailForwardingAddr $ mailFilterOrd
+ er $ mailFilterArticle ) )

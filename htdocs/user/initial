@@ -1,0 +1,39 @@
+<?php
+
+$conf_keys["postldapadmin"] = array(
+                    "ldapserver"        => "no_check",
+                    "ldapport"          => "check_port",
+                    "ldapbinddn"        => "no_check",
+                    "ldapbindpw"        => "no_check",
+                    "ldapbasedn"        => "no_check",
+                    "diskquotadefault"  => "check_diskquota",
+                    "basemaildir"       => "no_check",
+                    "lineperpage"       => "check_ucount",
+                    "ldapusersuffix"    => "no_check",
+                    "ldaplistsuffix"    => "no_check",
+                    "ldapscope"         => "check_scope",
+                    "ldapfilter"        => "no_check",
+                    "ldapmlfilter"      => "no_check",
+                    "ldapobjectclass"   => "no_check",
+                    "displayuser"       => "no_check",
+                    "displayml"         => "no_check",
+                    "ldapobjectclass"   => "no_check",
+                    "maildelcommand"    => "no_check",
+                    "quotaunit"         => "check_quota",
+                    "quotasize"         => "check_num",
+                    "searchuserbutton"  => "check_plugindata",
+                    "localpartrfccheck" => "check_boolean",
+                    "forwardconf"       => "check_boolean",
+                    "forwardnum"        => "check_num_forward",
+                    "forwardfirstmatch" => "check_boolean");
+
+$conf_def["postldapadmin"] = array(
+                    "ldapport"          => 389,
+                    "lineperpage"       => 10,
+                    "searchuserbutton"  => "",
+                    "localpartrfccheck" => 0,
+                    "localpartrfccheck" => 0,
+                    "forwardconf"       => 0,
+                    "forwardnum"        => 3,
+                    "forwardfirstmatch" => 0);
+?>

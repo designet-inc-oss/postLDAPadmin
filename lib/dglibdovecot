@@ -1,0 +1,587 @@
+<?php
+/***********************************************************
+ * dovecot.sieveライブラリ
+ **********************************************************/
+// sieveファイルフォーマット
+// require
+define("SIEVE_REQUIRE",      "require \"fileinto\";\n" .
+                             "require \"envelope\";\n" .
+                             "require \"variables\";\n\n");
+// 送信者条件一致	
+define("FROM_IS",            "    anyof (\n" .
+                             "        header :is \"from\" \"%s\",\n" .
+                             "        envelope :is \"from\" \"%s\"\n    )");
+// 送信者条件含む
+define("FROM_CONTAINS",      "    anyof (\n" .
+                             "        header :contains \"from\" \"%s\",\n" .
+                             "        envelope :contains \"from\" \"%s\"\n    )");
+// 送信者条件含まない
+define("FROM_NOT_CONTAINS",  "    allof (\n" .
+                             "        not header :contains \"from\" \"%s\",\n" .
+                             "        not envelope :contains \"from\" \"%s\"\n    )");
+// 送信者条件が空
+define("FROM_EMPTY",         "    anyof (\n" .
+                             "        not exists \"from\",\n" .
+                             "        header :is \"from\" \"\",\n" .
+                             "        envelope :is \"from\" \"\"\n    )");
+// 件名条件一致
+define("SUBJ_IS",            "    header :is :comparator \"i;octet\"" .
+                             " \"subject\" \"%s\"");
+// 件名条件含む
+define("SUBJ_CONTAINS",      "    header :contains :comparator \"i;octet\"" .
+                             " \"subject\" \"%s\"");
+// 件名条件含まない
+define("SUBJ_NOT_CONTAINS",  "    not header :contains :comparator \"i;octet\"" .
+                             " \"subject\" \"%s\"");
+// 件名条件が空
+define("SUBJ_EMPTY",         "    anyof (\n" .
+                             "        not exists \"subject\",\n" .
+                             "        header :is \"subject\" \"\"\n    )");
+// 宛先条件一致
+define("ENV_IS",             "    anyof (\n" .
+                             "        header :is [\"to\", \"cc\"] \"%s\",\n" .
+                             "        envelope :is \"to\" \"%s\"\n    )");
+// 宛先条件含む
+define("ENV_CONTAINS",       "    anyof (\n" .
+                             "        header :contains [\"to\", \"cc\"] \"%s\",\n" .
+                             "        envelope :contains \"to\" \"%s\"\n" .
+                             "    )");
+// 宛先条件含まない
+define("ENV_NOT_CONTAINS",   "    allof (\n" .
+                             "        not header :contains \"to\" \"%s\",\n" .
+                             "        not header :contains \"cc\" \"%s\",\n" .
+                             "        not envelope :contains \"to\" \"%s\"\n" .
+                             "    )");
+// 宛先条件が空
+define("ENV_EMPTY",          "    anyof (\n" .
+                             "        allof (\n" .
+                             "            not exists \"to\",\n" .
+                             "            not exists \"cc\"\n" .
+                             "        ),\n" .
+                             "        allof (\n" .
+                             "            header :is \"to\" \"\",\n" .
+                             "            header :is \"cc\" \"\"\n" .
+                             "        ),\n" .
+                             "        allof (\n" .
+                             "            header :is \"to\" \"\",\n" .
+                             "            not exists \"cc\"\n" .
+                             "        ),\n" .
+                             "        allof (\n" .
+                             "            header :is \"cc\" \"\",\n" .
+                             "            not exists \"to\"\n" .
+                             "        ),\n" .
+                             "        envelope :is \"to\" \"\"\n" .
+                             "    )");
+
+// メール転送設定のフォーマット
+define("LIST_FORMAT",        "if allof (\n%s%s\n)\n");
+define("FIRSTMATCH_RULE",    "    not string :matches \"\${firstmatch}\" " . 
+                             "\"1\"");
+
+// メール転送設定のフォーマット
+define("FWDPROCESS_FORMAT",  "{\n" .
+                             "    redirect \"%s\";\n" .
+                             "    set \"rule_match\" \"1\";\n%s%s" .
+                             "}\n");
+define("FIRSTMATCH_FORMAT",  "set \"firstmatch\" \"1\";\n"); 
+define("RECIEVE_FORMAT",     "set \"recieve\" \"1\";\n"); 
+define("ALLTRANSFER_FORMAR", "redirect \"%s\";\n" . 
+                             "set \"rule_match\" \"1\";\n%s%s");
+define("RECPROCESS_FORMAT",  "if anyof (\n" .
+                             "    not string :matches \"\${rule_match}\" " . 
+                             "\"1\",\n" . 
+                             "    string :matches \"\${recieve}\" \"1\"\n" . 
+                             ")\n" .
+                             "{\n" . 
+                             "    fileinto \"INBOX\";\n" . 
+                             "}\n");
+
+
+// 種類の定義
+define("TYPE_FROM",          "0");
+define("TYPE_SUBJ",          "1");
+define("TYPE_ENV",           "2");
+
+// ルールの定義
+define("RULE_IS",            "1");
+define("RULE_CONTAINS",      "2");
+define("RULE_NOT_CONTAINS",  "3");
+define("RULE_EMPTY",         "4");
+define("FIRSTMATCH_ON",      "1");
+
+// 文字コード
+define("STRCODE_FROM",         "eucjp-win");
+define("STRCODE_TO",           "UTF-8");
+
+// 区切り文字
+define("RULE_DELIM",           ",\n");
+
+// ログ出力用文字列
+define("FWDLIST",              "forward");
+define("SENDER",               " sender");
+define("SUBJECT",              " subject");
+
+// ファイル名
+define("SIEVEFILENAME",        "dovecot.sieve");
+define("TMPFILENAME",          "tmp");
+
+// コマンド
+define("MAKESIEVE_PATH",        "%sbin/make_sieve");
+define("MAKESIEVE_COMMAND",     "sudo -u vmail %sbin/make_sieve %s");
+define("MAIL_DIR",              "Maildir/");
+
+/***********************************************************
+ * make_sieve_rules()
+ *
+ * ルールの作成を行う
+ *
+ * [引数]
+ * $rule     作成したルールを格納する変数(参照渡し)
+ * $type     作成するルールの種別
+ * $ruletype 作成するルールの条件種別
+ * $val      条件のキーワード
+ *
+ * [返り値]
+ * TRUE      作成に成功
+ * FALSE     作成に失敗
+ ************************************************************/
+function make_sieve_rules(&$rule, $type, $ruletype, $val)
+{
+
+    /* キーワード文字列のエスケープ */
+    if ($val !== "") {
+        $escval = addslashes($val);
+    } else {
+        $escval = "";
+    }
+
+    /* 種類ごとに分岐 */
+    switch($type) {
+
+        /* 送信者条件 */
+        case TYPE_FROM:
+
+            /* ルールごとに分岐 */
+            switch ($ruletype) {
+
+                /* 一致 */
+                case RULE_IS:
+                    $tmp = sprintf(FROM_IS, $escval, $escval);
+                break;
+
+                /* 含む */
+                case RULE_CONTAINS:
+                    $tmp = sprintf(FROM_CONTAINS, $escval, $escval);
+                break;
+
+                /* 含まない */
+                case RULE_NOT_CONTAINS:
+                    $tmp = sprintf(FROM_NOT_CONTAINS, $escval, $escval, $escval);
+                break;
+
+                /* 空 */
+                case RULE_EMPTY:
+                    $tmp = sprintf(FROM_EMPTY);
+                break;
+
+                /* それ以外 */
+                default:
+                    return FALSE;
+            }
+        break;
+
+        /* 件名条件 */
+        case TYPE_SUBJ:
+
+            /* ルールごとに分岐 */
+            switch ($ruletype) {
+
+                /* 一致 */
+                case RULE_IS:
+                    $tmp = sprintf(SUBJ_IS, $escval);
+                break;
+
+                /* 含む */
+                case RULE_CONTAINS:
+                    $tmp = sprintf(SUBJ_CONTAINS, $escval);
+                break;
+
+                /* 含まない */
+                case RULE_NOT_CONTAINS:
+                    $tmp = sprintf(SUBJ_NOT_CONTAINS, $escval);
+                break;
+
+                /* 空 */
+                case RULE_EMPTY:
+                    $tmp = sprintf(SUBJ_EMPTY);
+                break;
+
+                /* それ以外 */
+                default:
+                    return FALSE;
+            }
+        break;
+
+        /* 宛先条件 */
+        case TYPE_ENV:
+
+            /* ルールごとに分岐 */
+            switch ($ruletype) {
+
+                /* 一致 */
+                case RULE_IS:
+                    $tmp = sprintf(ENV_IS, $escval, $escval);
+                break;
+
+                /* 含む */
+                case RULE_CONTAINS:
+                    $tmp = sprintf(ENV_CONTAINS, $escval, $escval);
+                break;
+
+                /* 含まない */
+                case RULE_NOT_CONTAINS:
+                    $tmp = sprintf(ENV_NOT_CONTAINS, $escval, $escval, $escval);
+                break;
+
+                /* 空 */
+                case RULE_EMPTY:
+                    $tmp = sprintf(ENV_EMPTY);
+                break;
+
+                /* それ以外 */
+                default:
+                    return FALSE;
+            }
+        break;
+
+        /* ヘッダの種類が不正 */
+        default:
+            return FALSE;
+    }
+
+    /* 文字コードを変換 */
+    $rule = mb_convert_encoding($tmp, STRCODE_TO, STRCODE_FROM);
+
+    return TRUE;
+}
+
+/***********************************************************
+ * write_fwdlist_rules()
+ *
+ * 転送先ルールの書き込みを行う
+ *
+ * [引数]
+ * $data             作成するルールのデータ
+ * $o_array          作成するルールの順序
+ * $path             作成するルールのパス
+ * &$sieve_detail    sieveファイルの文字列
+ *
+ * [返り値]
+ * TRUE      作成に成功
+ * FALSE     作成に失敗
+ ************************************************************/
+function write_fwdlist_rules($ruledata, $o_array, &$sieve_detail)
+{
+    // 変数の初期化
+    $data = array();
+    global $log_msg;
+    global $msgarr;
+    global $web_conf;
+    global $url_data;
+
+    /* foreach で順番にチェック */
+    foreach($o_array as $key => $value) {
+
+        // OFFのオーダーは無視
+        if ($value['state'] === "0") {
+            continue;
+        }
+        if ($value['filter_id'] === "") {
+            continue;
+        }
+
+        /* 変数の初期化 */
+        $tmp = "";
+        $onerule = "";
+        $rules = "";
+        $save = "";
+        $data = array();
+        $id = $value['filter_id'];
+
+        // 全て転送の場合
+        if ($ruledata[$id][FROM_TERM] === INVALID_TERM && 
+            $ruledata[$id][SUBJECT_TERM] === INVALID_TERM &&
+            $ruledata[$id][RECIPIENT_TERM] === INVALID_TERM) {
+
+            // FirstMatch条件がONの場合
+            if ($web_conf[$url_data["script"]]["forwardfirstmatch"]
+                === FIRSTMATCH_ON) {
+                // ルールの整形
+                $first_match = FIRSTMATCH_RULE;
+
+                // ルールを置換
+                $rules = sprintf(LIST_FORMAT, $first_match, "");
+
+                // ルールを格納
+                $sieve_detail .= $rules;
+
+                // 処理の整形
+                $first_match = "    " . FIRSTMATCH_FORMAT;
+                // 残す/残さない処理の整形
+                $recieve = "";
+                if ($ruledata[$id][RECEIVED_MAIL] === RECEIVED_ON) {
+                    $recieve = "    " . RECIEVE_FORMAT;
+                }
+
+                // ルールを置換
+                $rules = sprintf(FWDPROCESS_FORMAT,
+                                 $ruledata[$id][TRANS_ADDR],
+                                 $first_match, $recieve);
+
+                // ルールを格納
+                $sieve_detail .= $rules;
+
+            // FirstMatch条件がOFFの場合
+            } else {
+                // 処理の整形
+                $first_match = "";
+
+                // 残す/残さない処理のルール整形
+                $recieve = "";
+                if ($ruledata[$id][RECEIVED_MAIL] === RECEIVED_ON) {
+                    $recieve = RECIEVE_FORMAT;
+                }
+
+                // ルールを置換
+                $rules = sprintf(ALLTRANSFER_FORMAR,
+                                 $ruledata[$id][TRANS_ADDR],
+                                 $first_match, $recieve);
+
+                // ルールを格納
+                $sieve_detail .= $rules;
+            }
+
+        // 無条件で転送が設定されていないとき各ルールを格納
+        } else {
+
+            // 送信者ルールがあれば格納
+            if ($ruledata[$id][FROM_TERM] !== INVALID_TERM) {
+                $input_value = "";
+                if (isset($ruledata[$id][FROM_FLAG])) {
+                    $input_value = $ruledata[$id][FROM_FLAG];
+                }
+                $ret = make_sieve_rules($tmp, TYPE_FROM,
+                                        $ruledata[$id][FROM_TERM],
+                                        $input_value);
+                if ($ret === FALSE) {
+                    // エラー処理
+                    $log_msg = sprintf($msgarr['26001'][LOG_MSG],
+                                  FWDLIST . SENDER, $ruledata[$id][FROM_FLAG],
+                                       $ruledata[$id][FROM_TERM]);
+                    return FALSE;
+                } else {
+                    $data[] =  $tmp;
+                }
+            }
+
+            // 件名ルールがあれば格納
+            if ($ruledata[$id][SUBJECT_TERM] !== INVALID_TERM) {
+                $input_value = "";
+                if (isset($ruledata[$id][SUBJECT_FLAG])) {
+                    $input_value = $ruledata[$id][SUBJECT_FLAG];
+                }
+                $ret = make_sieve_rules($tmp, TYPE_SUBJ,
+                                        $ruledata[$id][SUBJECT_TERM],
+                                        $input_value);
+                if ($ret === FALSE) {
+                    // エラー処理
+                    $log_msg = sprintf($msgarr['26001'][LOG_MSG],
+                               FWDLIST . SENDER, $ruledata[$id][SUBJECT_FLAG],
+                                       $ruledata[$id][SUBJECT_TERM]);
+                    return FALSE;
+                } else {
+                    $data[] =  $tmp;
+                }
+            }
+
+            // 宛先ルールがあれば格納
+            if ($ruledata[$id][RECIPIENT_TERM] !== INVALID_TERM) {
+                $input_value = "";
+                if (isset($ruledata[$id][RECIPIENT_FLAG])) {
+                    $input_value = $ruledata[$id][RECIPIENT_FLAG];
+                }
+                $ret = make_sieve_rules($tmp, TYPE_ENV,
+                                        $ruledata[$id][RECIPIENT_TERM],
+                                        $input_value);
+                if ($ret === FALSE) {
+                    // エラー処理
+                    $log_msg = sprintf($msgarr['26001'][LOG_MSG],
+                             FWDLIST . SENDER, $ruledata[$id][RECIPIENT_FLAG],
+                                       $ruledata[$id][RECIPIENT_TERM]);
+                    return FALSE;
+                } else {
+                    $data[] =  $tmp;
+                }
+            }
+
+            // ルールを整形
+            $oneline = implode(RULE_DELIM, $data);
+
+            // FirstMatch条件を判定
+            $first_match = "";
+            if ($web_conf[$url_data["script"]]["forwardfirstmatch"] 
+                === FIRSTMATCH_ON) {
+                $first_match = FIRSTMATCH_RULE . RULE_DELIM;
+            }
+
+            // ルールを置換
+            $rules = sprintf(LIST_FORMAT, $first_match, $oneline);
+
+            // ルールを格納
+            $sieve_detail .= $rules;
+
+            // 処理を作成
+            $first_match = "";
+            if ($web_conf[$url_data["script"]]["forwardfirstmatch"] === 
+                                                               FIRSTMATCH_ON) {
+                $first_match = "    " . FIRSTMATCH_FORMAT;
+            }
+            $recieve = "";
+            if ($ruledata[$id][RECEIVED_MAIL] === RECEIVED_ON) {
+                $recieve = "    " . RECIEVE_FORMAT;
+            }
+
+            // ルールを置換
+            $rules = sprintf(FWDPROCESS_FORMAT, $ruledata[$id][TRANS_ADDR], 
+                             $first_match, $recieve);
+
+            // ルールを格納
+            $sieve_detail .= $rules;
+
+        }
+    }
+
+    // 残す/残さないの処理を書き込み
+    $sieve_detail .= RECPROCESS_FORMAT;
+
+    return TRUE;
+}
+
+/***********************************************************
+ * make_sievefile
+ *
+ * dovecot.sieveファイルの作成
+ *
+ * [引数]
+ *       無し
+ *
+ * [返り値]
+ * TRUE      取得に成功
+ * FALSE     取得に失敗
+ ************************************************************/
+function make_sievefile()
+{
+    // 変数の宣言
+    global $log_msg;
+    global $msgarr;
+    global $err_msg;
+    global $basedir;
+    global $ldapdata;
+    $tmpname = "";
+    $filterorder = array();
+    $filterarticle = array();
+    $sieve_detail = "";
+
+    // ldap情報の取得
+
+    // 情報の格納
+    $path = $ldapdata[0]['mailDirectory'][0];
+
+    // dovecot.sieveファイルのパスを作成
+    $sievefile = $path . "/" . MAIL_DIR . SIEVEFILENAME;
+
+    // フィルタ情報を取得
+    // オーダー情報の取得
+    order_analysis($ldapdata[0]['mailFilterOrder'][0], $filterorder);
+
+    // アーティクルの取得
+    $ret = article_analysis($ldapdata[0]['mailFilterArticle'], $filterarticle);
+    if ($ret === FALSE) {
+        $err_msg = $msgarr['25005'][SCREEN_MSG];
+        return FALSE;
+    }
+
+    // require設定の整形
+    $sieve_detail .= SIEVE_REQUIRE;
+
+    // メール転送設定のオーダーが存在するとき
+    if (isset($filterarticle)){
+
+        // メール転送設定を書き込み
+        $ret = write_fwdlist_rules($filterarticle, $filterorder,
+                                   $sieve_detail);
+
+        if ($ret === FALSE) {
+            return FALSE;
+        }
+    }
+
+    // コマンドの存在チェック
+    $cmdpath = sprintf(MAKESIEVE_PATH, $basedir);
+    if (is_file($cmdpath) === FALSE) { 
+        $log_msg = sprintf($msgarr['26004'][LOG_MSG], $cmdpath);
+        return FALSE;
+    }
+
+    // コマンドを作成
+    $cmd = sprintf(MAKESIEVE_COMMAND, $basedir, $sievefile);
+
+    // コマンドをpopen
+    $handle = popen($cmd, 'w');
+
+    // コマンドの実行
+    fwrite($handle, $sieve_detail);
+
+    // コマンドハンドルを閉じ、コマンドの返り値を取得する
+    $ret = pclose($handle);
+
+    // コマンドのエラー処理
+    switch ($ret) {
+
+        // 引数が足りない
+        case 1:
+            $log_msg = sprintf($msgarr['26005'][LOG_MSG], $cmd);
+            return FALSE;
+
+        // 古いファイルのバックアップに失敗
+        case 2:
+            $log_msg = sprintf($msgarr['26006'][LOG_MSG], $cmd);
+            return FALSE;
+
+        // TMPファイルをmvするのに失敗
+        // sieveファイルの巻き戻しも行なう
+        case 3:
+            $log_msg = sprintf($msgarr['26007'][LOG_MSG], $cmd);
+            return FALSE;
+
+        // パーミッションの変更に失敗
+        // sieveファイルの巻き戻しも行なう
+        case 4:
+            $log_msg = sprintf($msgarr['26008'][LOG_MSG], $cmd);
+            return FALSE;
+
+        // 一時ファイルの作成に失敗
+        case 5:
+            $log_msg = sprintf($msgarr['26009'][LOG_MSG], $cmd);
+            return FALSE;
+
+        // 一時ファイルへの書き込みに失敗
+        case 6:
+            $log_msg = sprintf($msgarr['26010'][LOG_MSG], $cmd);
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+?>

@@ -1,0 +1,1048 @@
+<?php
+
+/*
+ * postLDAPadmin
+ *
+ * Copyright (C) 2006,2007 DesigNET, INC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
+/***********************************************************
+ * LDAPライブラリ
+ *
+ * $RCSfile$
+ * $Revision$
+ * $Date$
+ **********************************************************/
+
+/* マクロ定義 */
+define ("LDAP_OK",		 0);	    /* 成功 */
+define ("LDAP_ERR_FILE",	-1);	    /* ファイルIOエラー */
+define ("LDAP_ERR_BIND",	-2);	    /* LDAPバインドエラー */
+define ("LDAP_ERR_SEARCH",	-3);	    /* LDAP検索エラー */
+define ("LDAP_ERR_ADD",		-4);	    /* LDAP登録エラー */
+define ("LDAP_ERR_MOD",		-5);	    /* LDAP変更エラー */
+define ("LDAP_ERR_PARAM",	-6);	    /* 不正な引数が入力された */
+define ("LDAP_ERR_DATA",	-7);	    /* 不正なデータが存在した */
+define ("LDAP_ERR_NODATA",	-8);	    /* 該当するエントリが存在しない */
+define ("LDAP_ERR_DUPLICATE",	-9);	    /* 複数のエントリが存在 */
+define ("LDAP_ERR_DEL",		-10);	    /* LDAP削除エラー */
+define ("LDAP_ERR_NOATTR",	-11);	    /* LDAP属性値なしエラー */
+define ("LDAP_ERR_OTHER",	-127);	    /* その他のエラー */
+
+/* サーチの種類 */
+define("TYPE_ONELEVEL",		0);
+define("TYPE_ONEENTRY",		1);
+define("TYPE_SUBTREE",		2);
+
+/* 操作の種類 */
+define("TYPE_ADD",		0);
+define("TYPE_MODIFY",		1);
+define("TYPE_DELETE",		2);
+define("TYPE_ADD_ATTRIBUTE",	3);
+define("TYPE_REPLACE_ATTRIBUTE",	4);
+define("TYPE_MODIFY_DELETE",	5);
+
+define ("LDAP_SUCCESS",		0);  /* LDAPのアクセスに成功 */
+define ("LDAP_NO_SUCH_OBJECT",	32); /* 指定したDNのエントリが見つからない */
+define ("LDAP_ALREADY_EXISTS",	68); /* 指定したDNのエントリが既にある */
+define ("LDAP_DECODING_ERROR",	84); /* 指定した属性値が見つからない */
+define ("LDAP_NO_SUCH_VALUE",	16); /* 指定した属性の値が存在しない */
+define ("LDAP_NO_SUCH_ATTR",	17); /* 指定した属性の値が存在しない */
+define ("LDAP_EXISTS_VALUE",	20); /* 指定した属性の値が存在している */
+define ("LDAP_INVALID_CREDENTIALS",	49); /* bindn,bindpwが間違っている */
+define ("LDAP_SERVER_DOWN",	-1); /* LDAPサービス停止 */
+
+define("PG_ENCODING",		"EUC-JP");
+define("LDAP_ENCODING",		"UTF-8");
+define("LDAP_VERSION",		3);
+
+define("OPERATION_LDAP_CONNECTION", "NULL LDAP CONNECTION");
+
+
+
+
+/***************************************************************************
+ * LDAP_connect_server()
+ * 
+ * $web_confで与えられたサーバに対してコネクト・バインドを行う。  
+ *
+ * [引数]
+ *	なし
+ * [返り値]
+ *	$ds		LDAPリンクID(正常)
+ *	LDAP_ERR_BIND	バインドエラー
+ **************************************************************************/
+function LDAP_connect_server()
+{
+    global $web_conf;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $env;
+    global $url_data;
+
+    /* 読込み専用の場合 */
+    $lservers = explode(",", $web_conf[$url_data["script"]]["ldapserver"]);
+    $lports = explode(",", $web_conf[$url_data["script"]]["ldapport"]);
+    $max = 1;
+
+    /* ユーザ自身でバインドする場合 */
+    if (isset($env["user_self"]) && $env["user_self"] === TRUE) {
+        $ldapbinddn = $env["user_selfdn"];
+        $ldapbindpw = $env["user_selfpw"];
+    } else {
+        $ldapbinddn = $web_conf[$url_data["script"]]["ldapbinddn"];
+        $ldapbindpw = $web_conf[$url_data["script"]]["ldapbindpw"];
+    }
+
+    $ldap_err = "";
+    $ldap_log = "";
+    
+    for ($i = 0; $i < $max; $i++) {
+
+        $lserver = trim($lservers[$i]);
+        if ($lserver == "") {
+            continue;
+        }
+
+        $lport = trim($lports[$i]);
+        if ($lport == "") {
+            $lport = 389;
+        }
+
+        /* LDAPサーバへ接続する */
+        $ds = @ldap_connect($lserver, $lport);
+        if ($ds === FALSE) {
+            $ldap_err .= sprintf($msgarr['03019'][SCREEN_MSG], $lserver, $lport);
+            $ldap_log .= sprintf($msgarr['03019'][LOG_MSG], $lserver, $lport);
+            continue;
+        }
+
+        /* LDAPのバージョンを3に設定 */
+        if (!ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, LDAP_VERSION)) {
+            $ldap_err .= sprintf($msgarr['03020'][SCREEN_MSG], $lserver, $lport);
+            $ldap_log .= sprintf($msgarr['03020'][LOG_MSG], $lserver, $lport);
+	    ldap_unbind($ds);
+            continue;
+        }
+
+        /* LDAPディレクトリにバインドする */
+        $r = @ldap_bind($ds, $ldapbinddn, $ldapbindpw);
+        if ($r === FALSE) {
+            $errno = ldap_errno($ds);
+            if ($errno == LDAP_SUCCESS) {
+                $ldap_err .= sprintf($msgarr['03021'][SCREEN_MSG], $lserver, $lport);
+                $ldap_log .= sprintf($msgarr['03021'][LOG_MSG], $lserver, $lport);
+            } else {
+                $error = ldap_error($ds);
+                $ldap_err .= sprintf($msgarr['03022'][SCREEN_MSG], $error, $lserver, $lport);
+                $ldap_log .= sprintf($msgarr['03022'][LOG_MSG], $error, $lserver, $lport);
+                if ($errno === LDAP_SERVER_DOWN) {
+                    $env["ldap_server_down"] = TRUE;
+                }
+            }
+	    ldap_unbind($ds);
+            continue;
+        }
+
+        /* 接続できた場合 エラーが発生している場合 */
+        if ($ldap_err != "") {
+            $ldap_err = preg_replace("/<br>$/i", "", $ldap_err);
+            $ldap_log = preg_replace("/<br>$/i", "", $ldap_log);
+            result_log(OPERATION_LDAP_CONNECTION . ":NG:" . $ldap_log);
+        }
+        return $ds;
+    }
+
+    $err_msg = preg_replace("/<br>$/i", "", $ldap_err);
+    $log_msg = preg_replace("/<br>$/i", "", $ldap_log);
+    return (LDAP_ERR_BIND);
+}
+
+/****************************************************************************
+ * main_get_entry()
+ * 
+ * 指定された検索スコープの型を使い検索をした結果、得られるエントリの必要
+ * 情報を、連想配列(&$data)に格納する。
+ *
+ * [引数]
+ *	文字列 		$basedn 	検索ベースDN
+ *	文字列 		$filter		検索フィルタ 
+ *	配列 		$attrs		必要な要素のテーブル 
+ *   	文字列 		$type		検索スコープの型
+ *	連想配列	&$data 		参照渡しされた必要な要素データの格納先
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_BIND	バインドエラー 
+ *	LDAP_ERR_SEARCH	サーチエラー 
+ *	LDAP_ERR_PARAM	不正な引数入力
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ *    	LDAP_ERR_OTHER	その他のエラー	
+ ***************************************************************************/
+function main_get_entry($basedn, $filter, $attrs, $type, &$data)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    $s_attrs = array();
+
+    /* 引数チェック */
+    if (!$basedn) {
+        $err_msg = $msgarr['03001'][SCREEN_MSG];
+        $log_msg = $msgarr['03001'][LOG_MSG];
+	return (LDAP_ERR_PARAM);
+    }
+    if (!$filter){
+        $err_msg = $msgarr['03002'][SCREEN_MSG];
+        $log_msg = $msgarr['03002'][LOG_MSG];
+	return (LDAP_ERR_PARAM);
+    }
+    if (!is_array($attrs)) {
+        $err_msg = $msgarr['03003'][SCREEN_MSG];
+        $log_msg = $msgarr['03003'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+
+    /* 属性名を小文字に変換 */
+    for ($i = 0, $max = count($attrs); $i < $max; $i++) {
+        $tmp = strtolower($attrs[$i]);
+
+        /* アトリビュートにDNがあるときは次へ */
+        if ($tmp == "dn") {
+            continue;
+	}
+        $s_attrs[$i] = $tmp;
+    }
+
+    /* バインド */
+    $ds = LDAP_connect_server();
+    if ($ds == LDAP_ERR_BIND) {
+	return (LDAP_ERR_BIND);
+    }
+
+    /* サーチ */
+    $sr = ldap_scope_search($ds, $basedn, $s_attrs, $filter, $type);
+    if ($sr === FALSE){
+	$errno = ldap_errno($ds);
+	if ($errno == LDAP_NO_SUCH_OBJECT) {
+            $err_msg = sprintf($msgarr['03004'][SCREEN_MSG], $basedn);
+            $log_msg = sprintf($msgarr['03004'][LOG_MSG], $basedn);
+	    ldap_unbind($ds);
+	    return (LDAP_ERR_NODATA);
+
+	} elseif ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03005'][SCREEN_MSG], $basedn);
+            $log_msg = sprintf($msgarr['03005'][LOG_MSG], $basedn);
+	    ldap_unbind($ds);
+	    return (LDAP_ERR_SEARCH);
+
+	} else {
+	    $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03006'][SCREEN_MSG], $error, $basedn);
+            $log_msg = sprintf($msgarr['03006'][LOG_MSG], $error, $basedn);
+	    ldap_unbind($ds);
+	    return (LDAP_ERR_SEARCH);
+	}
+    }
+
+    /* データ格納 */
+    $ret = set_data($ds, $sr, $attrs, $s_attrs, $type, $data, $basedn);
+	
+    ldap_unbind($ds);
+    return $ret;
+}
+
+/****************************************************************************
+ * main_get_entry_connect()
+ * 
+ * 指定された検索スコープの型を使い検索をした結果、得られるエントリの必要
+ * 情報を、連想配列(&$data)に格納する。
+ *
+ * [引数]
+ *	文字列 		$basedn 	検索ベースDN
+ *      文字列          $ds             LDAPリンクID
+ *	文字列 		$filter		検索フィルタ 
+ *	配列 		$attrs		必要な要素のテーブル 
+ *   	文字列 		$type		検索スコープの型
+ *	連想配列	&$data 		参照渡しされた必要な要素データの格納先
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_BIND	バインドエラー 
+ *	LDAP_ERR_SEARCH	サーチエラー 
+ *	LDAP_ERR_PARAM	不正な引数入力
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ *    	LDAP_ERR_OTHER	その他のエラー	
+ ***************************************************************************/
+function main_get_entry_connect($basedn, $ds, $filter, $attrs, $type, &$data)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    $s_attrs = array();
+
+    /* 引数チェック */
+    if (!$basedn) {
+        $err_msg = $msgarr['03001'][SCREEN_MSG];
+        $log_msg = $msgarr['03001'][LOG_MSG];
+	return (LDAP_ERR_PARAM);
+    }
+    if (!$filter){
+        $err_msg = $msgarr['03002'][SCREEN_MSG];
+        $log_msg = $msgarr['03002'][LOG_MSG];
+	return (LDAP_ERR_PARAM);
+    }
+    if (!is_array($attrs)) {
+        $err_msg = $msgarr['03003'][SCREEN_MSG];
+        $log_msg = $msgarr['03003'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+
+    /* 属性名を小文字に変換 */
+    for ($i = 0, $max = count($attrs); $i < $max; $i++) {
+        $tmp = strtolower($attrs[$i]);
+
+        /* アトリビュートにDNがあるときは次へ */
+        if ($tmp == "dn") {
+            continue;
+	}
+        $s_attrs[$i] = $tmp;
+    }
+
+    /* サーチ */
+    $sr = ldap_scope_search($ds, $basedn, $s_attrs, $filter, $type);
+    if ($sr === FALSE){
+	$errno = ldap_errno($ds);
+	if ($errno == LDAP_NO_SUCH_OBJECT) {
+            $err_msg = sprintf($msgarr['03004'][SCREEN_MSG], $basedn);
+            $log_msg = sprintf($msgarr['03004'][LOG_MSG], $basedn);
+	    return (LDAP_ERR_NODATA);
+
+	} elseif ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03005'][SCREEN_MSG], $basedn);
+            $log_msg = sprintf($msgarr['03005'][LOG_MSG], $basedn);
+	    return (LDAP_ERR_SEARCH);
+
+	} else {
+	    $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03006'][SCREEN_MSG], $error, $basedn);
+            $log_msg = sprintf($msgarr['03006'][LOG_MSG], $error, $basedn);
+	    return (LDAP_ERR_SEARCH);
+	}
+    }
+
+    /* データ格納 */
+    $ret = set_data($ds, $sr, $attrs, $s_attrs, $type, $data, $basedn);
+	
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_add_entry()
+ * 
+ * 連想配列($data)に格納されたデータをLDAPに登録する。
+ *
+ * [引数]
+ *	文字列 		$dn	 	登録するDN
+ *	連想配列	$data 		必要な要素データの格納先
+ * [返り値]
+ *	LDAP_OK			正常 
+ *	LDAP_ERR_BIND		バインドエラー 
+ *	LDAP_ERR_ADD		LDAPへの登録に失敗
+ *	LDAP_ERR_DUPLICATE	エントリが存在する
+ ***************************************************************************/
+function LDAP_add_entry($dn, $data)
+{
+
+    $ret = entry_operate($dn, $data, TYPE_ADD);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_add_entry_connect()
+ * 
+ * 連想配列($data)に格納されたデータをLDAPに登録する。
+ *
+ * [引数]
+ *	文字列 		$dn	 	登録するDN
+ *      文字列          $ds             LDAPリンクID
+ *	連想配列	$data 		必要な要素データの格納先
+ * [返り値]
+ *	LDAP_OK			正常 
+ *	LDAP_ERR_BIND		バインドエラー 
+ *	LDAP_ERR_ADD		LDAPへの登録に失敗
+ *	LDAP_ERR_DUPLICATE	エントリが存在する
+ ***************************************************************************/
+function LDAP_add_entry_connect($dn, $ds, $data)
+{
+
+    $ret = entry_operate_connect($dn, $ds, $data, TYPE_ADD);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_mod_entry()
+ * 
+ * LDAPに登録されたデータを、連想配列($data)に格納されたデータに変更する。
+ *
+ * [引数]
+ *	文字列 		$dn	 	変更するDN
+ *   	連想配列	$data 		必要な要素データの格納先
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_BIND	バインドエラー 
+ *	LDAP_ERR_MOD	LDAPの情報変更に失敗
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ ***************************************************************************/
+function LDAP_mod_entry($dn, $data)
+{
+
+    $ret = entry_operate($dn, $data, TYPE_MODIFY);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_mod_entry_connect()
+ * 
+ * LDAPに登録されたデータを、連想配列($data)に格納されたデータに変更する。
+ *
+ * [引数]
+ *	文字列 		$dn	 	変更するDN
+ *	文字列 		$ds	 	LDAPリンクID
+ *   	連想配列	$data 		必要な要素データの格納先
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_BIND	バインドエラー 
+ *	LDAP_ERR_MOD	LDAPの情報変更に失敗
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ ***************************************************************************/
+function LDAP_mod_entry_connect($dn, $ds, $data)
+{
+
+    $ret = entry_operate_connect($dn, $ds, $data, TYPE_MODIFY);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_del_entry()
+ * 
+ * LDAPに登録されたデータを、消去する。
+ *
+ * [引数]
+ *	文字列 		$basedn	 	消去するDN
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_BIND	バインドエラー 
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ *	LDAP_ERR_DEL	LDAPのエントリの削除に失敗
+ ***************************************************************************/
+function LDAP_del_entry($basedn)
+{
+    $data = "";
+    $ret = entry_operate($basedn, $data, TYPE_DELETE);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_del_entry_connect()
+ * 
+ * LDAPに登録されたデータを、消去する。
+ *
+ * [引数]
+ *	文字列 		$basedn	 	消去するDN
+ *      文字列          $ds            LDAPリンクID
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_BIND	バインドエラー 
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ *	LDAP_ERR_DEL	LDAPのエントリの削除に失敗
+ ***************************************************************************/
+function LDAP_del_entry_connect($basedn, $ds)
+{
+    $data = "";
+    $ret = entry_operate_connect($basedn, $ds, $data, TYPE_DELETE);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_add_attribute()
+ *
+ * LDAPに登録されたエントリの属性を追加する
+ *
+ * [引数]
+ *      文字列          $basedn         消去するDN
+ *      連想配列        $data           必要な要素データの格納先
+ * [返り値]
+ *      LDAP_OK         正常
+ *      LDAP_ERR_BIND   バインドエラー
+ *      LDAP_ERR_ADD    LDAPの情報追加に失敗
+ *      LDAP_ERR_NODATA エントリが存在しない
+ *      LDAP_ERR_DUPLICATE      属性値が存在する
+ ***************************************************************************/
+function LDAP_add_attribute($basedn, $data)
+{
+
+    $ret = entry_operate($basedn, $data, TYPE_ADD_ATTRIBUTE);
+    return $ret;
+}
+
+/****************************************************************************
+ * LDAP_del_attribute()
+ *
+ * LDAPに登録された1つのデータの属性を削除する
+ *
+ * [引数]
+ *      文字列          $dn             削除対象の属性を持つDN
+ *      配列            $attrs          削除する属性の名前の配列
+ * [返り値]
+ *      LDAP_OK         正常
+ *      LDAP_ERR_PARAM  不正な引数入力
+ *      LDAP_ERR_DEL    属性の削除に失敗
+ *      LDAP_ERR_NODATA エントリなし
+ *      LDAP_ERR_NOATTR 属性または属性値なし
+ ***************************************************************************/
+function LDAP_del_attribute($dn, $attrs)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 引数チェック */
+    if (!$dn) {
+        $err_msg = $msgarr['03001'][SCREEN_MSG];
+        $log_msg = $msgarr['03001'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+    if (!is_array($attrs)) {
+        $err_msg = $msgarr['03003'][SCREEN_MSG];
+        $log_msg = $msgarr['03003'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+
+    /* バインド */
+    $ds = LDAP_connect_server();
+    if ($ds == LDAP_ERR_BIND) {
+        return (LDAP_ERR_BIND);
+    }
+
+    /* 属性の削除 */
+    return del_attribute($ds, $dn, $attrs);
+}
+
+/****************************************************************************
+ * del_attribute()
+ *
+ * LDAPに登録された1つのデータの属性を削除する
+ *
+ * [引数]
+ *      文字列          $dn             削除対象の属性を持つDN
+ *      配列            $attrs          削除する属性の名前の配列
+ * [返り値]
+ *      LDAP_OK         正常
+ *      LDAP_ERR_PARAM  不正な引数入力
+ *      LDAP_ERR_DEL    属性の削除に失敗
+ *      LDAP_ERR_NODATA エントリなし
+ *      LDAP_ERR_NOATTR 属性または属性値なし
+ ***************************************************************************/
+function del_attribute($ds, $dn, $attrs)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    $enc_dn = mb_convert_encoding($dn, LDAP_ENCODING, PG_ENCODING);
+    $r = @ldap_mod_del($ds, $enc_dn, $attrs);
+    if ($r === FALSE) {
+        $errno = ldap_errno($ds);
+        if ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03007'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03007'][LOG_MSG], $dn);
+            $ret = LDAP_ERR_DEL;
+        } else {
+            $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03008'][SCREEN_MSG], $error, $dn);
+            $log_msg = sprintf($msgarr['03008'][LOG_MSG], $error, $dn);
+
+            if ($errno == LDAP_NO_SUCH_VALUE || $errno == LDAP_NO_SUCH_ATTR) {
+                $ret = LDAP_ERR_NOATTR;
+            } else if ($errno == LDAP_NO_SUCH_OBJECT) {
+                $ret = LDAP_ERR_NODATA;
+            } else {
+                $ret =  LDAP_ERR_DEL;
+            }
+        }
+        ldap_unbind($ds);
+        return $ret;
+    }
+
+    ldap_unbind($ds);
+
+    return (LDAP_OK);
+}
+
+/****************************************************************************
+ * entry_operate()
+ * 
+ * 指定されたデータ操作($type)を受けて追加・変更・削除・置換といった
+ * 処理を行う
+ *
+ * [引数]
+ *	文字列 		$dn	 	登録or変更or削除DN
+ *	連想配列 	$data	 	登録or変更するデータの配列
+ *	文字列 		$type	 	指定されたデータ操作	
+ * [返り値]
+ *	LDAP_OK			正常 
+ *	LDAP_ERR_BIND		バインドエラー 
+ *	LDAP_ERR_ADD		LDAPへの登録に失敗
+ *	LDAP_ERR_MOD		LDAPの情報変更に失敗
+ *	LDAP_ERR_NODATA		エントリが存在しない
+ *	LDAP_ERR_DUPLICATE	エントリが存在する
+ *	LDAP_ERR_DEL		LDAPのエントリの削除に失敗
+ ***************************************************************************/
+function entry_operate($dn, $data, $type)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 引数チェック */
+    if (!$dn) {
+        $err_msg = $msgarr['03001'][SCREEN_MSG];
+        $log_msg = $msgarr['03001'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+    if ((!is_array($data)) && ($type != TYPE_DELETE)) {
+        $err_msg = $msgarr['03003'][SCREEN_MSG];
+        $log_msg = $msgarr['03003'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+
+    /* バインド */
+    $ds = LDAP_connect_server();
+    if ($ds == LDAP_ERR_BIND) {
+        return (LDAP_ERR_BIND);
+    }
+
+    $conv_dn = mb_convert_encoding($dn, LDAP_ENCODING, PG_ENCODING);
+
+    /* エントリの追加・変更・削除・置換 */
+    if ($type == TYPE_ADD) {
+        $log_str = "エントリの追加";
+        $log_str_eng = "Add entry";
+        $r = @ldap_add($ds, $conv_dn, $data);
+    } elseif ($type == TYPE_MODIFY) {
+        $log_str = "エントリの変更";
+        $log_str_eng = "Modify entry";
+        $r = @ldap_modify($ds, $conv_dn, $data);
+    } elseif ($type == TYPE_DELETE) {
+        $log_str = "エントリの削除";
+        $log_str_eng = "Delete entry";
+        $r = @ldap_delete($ds, $conv_dn);
+    } elseif ($type == TYPE_ADD_ATTRIBUTE) {
+        $log_str = "属性の追加";
+        $log_str_eng = "Add attribution";
+        $r = @ldap_mod_add($ds, $conv_dn, $data);
+    } elseif ($type == TYPE_REPLACE_ATTRIBUTE) {
+        $log_str = "属性の追加";
+        $log_str_eng = "Add attribution";
+        $r = @ldap_mod_add($ds, $conv_dn, array($data[0] => $data[2]));
+    } elseif ($type == TYPE_MODIFY_DELETE) {
+        $log_str = "エントリの変更";
+        $log_str_eng = "Modify entry";
+        $r = @ldap_modify($ds, $conv_dn, $data[0]);
+    }
+
+    if ($r === FALSE) {
+        $errno = ldap_errno($ds);
+
+        /* すでに存在している */
+	if ($errno == LDAP_ALREADY_EXISTS) {
+            $err_msg = sprintf($msgarr['03009'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03009'][LOG_MSG], $dn);
+	    ldap_unbind($ds);
+            return (LDAP_ERR_DUPLICATE);
+        }
+        /* 見つからない */
+	if ($errno == LDAP_NO_SUCH_OBJECT) {
+            $err_msg = sprintf($msgarr['03004'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03004'][LOG_MSG], $dn);
+	    ldap_unbind($ds);
+            return (LDAP_ERR_NODATA);
+        }
+        /* すでに存在している(属性値) */
+	if ($errno == LDAP_EXISTS_VALUE) {
+            $err_msg = sprintf($msgarr['03010'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03010'][LOG_MSG], $dn);
+	    ldap_unbind($ds);
+            return (LDAP_ERR_DUPLICATE);
+        }
+
+        if ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03011'][SCREEN_MSG], $log_str, $dn);
+            $log_msg = sprintf($msgarr['03011'][LOG_MSG], $log_str_eng, $dn);
+        } else {
+            $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03012'][SCREEN_MSG], $log_str, $error, $dn);
+            $log_msg = sprintf($msgarr['03012'][LOG_MSG], $log_str_eng, $error, $dn);
+	}
+
+	ldap_unbind($ds);
+	if ($type == TYPE_ADD || $type == TYPE_ADD_ATTRIBUTE ||
+            $type == TYPE_REPLACE_ATTRIBUTE) {
+            return (LDAP_ERR_ADD);
+	} elseif ($type == TYPE_MODIFY || $type == TYPE_MODIFY_DELETE){
+            return (LDAP_ERR_MOD);
+	} elseif ($type == TYPE_DELETE){
+            return (LDAP_ERR_DEL);
+	}
+    }
+    /* 置換の場合は削除 */
+    if ($type == TYPE_REPLACE_ATTRIBUTE) {
+        return del_attribute($ds, $dn, array($data[0] => $data[1]));
+    /* 修正削除の場合は削除 */
+    } else if ($type == TYPE_MODIFY_DELETE) {
+        return del_attribute($ds, $dn, $data[1]);
+    }
+    ldap_unbind($ds);
+
+    return (LDAP_OK);
+}
+
+/****************************************************************************
+ * entry_operate_connect()
+ * 
+ * 指定されたデータ操作($type)を受けて追加・変更・削除・置換といった
+ * 処理を行う
+ *
+ * [引数]
+ *	文字列 		$dn	 	登録or変更or削除DN
+ *      文字列          $ds             LDAPリンクID
+ *	連想配列 	$data	 	登録or変更するデータの配列
+ *	文字列 		$type	 	指定されたデータ操作	
+ * [返り値]
+ *	LDAP_OK			正常 
+ *	LDAP_ERR_BIND		バインドエラー 
+ *	LDAP_ERR_ADD		LDAPへの登録に失敗
+ *	LDAP_ERR_MOD		LDAPの情報変更に失敗
+ *	LDAP_ERR_NODATA		エントリが存在しない
+ *	LDAP_ERR_DUPLICATE	エントリが存在する
+ *	LDAP_ERR_DEL		LDAPのエントリの削除に失敗
+ ***************************************************************************/
+function entry_operate_connect($dn, $ds, $data, $type)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 引数チェック */
+    if (!$dn) {
+        $err_msg = $msgarr['03001'][SCREEN_MSG];
+        $log_msg = $msgarr['03001'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+    if ((!is_array($data)) && ($type != TYPE_DELETE)) {
+        $err_msg = $msgarr['03003'][SCREEN_MSG];
+        $log_msg = $msgarr['03003'][LOG_MSG];
+        return (LDAP_ERR_PARAM);
+    }
+
+    $conv_dn = mb_convert_encoding($dn, LDAP_ENCODING, PG_ENCODING);
+
+    /* エントリの追加・変更・削除・置換 */
+    if ($type == TYPE_ADD) {
+        $log_str = "エントリの追加";
+        $log_str_eng = "Add entry";
+        $r = @ldap_add($ds, $conv_dn, $data);
+    } elseif ($type == TYPE_MODIFY) {
+        $log_str = "エントリの変更";
+        $log_str_eng = "Modify entry";
+        $r = @ldap_modify($ds, $conv_dn, $data);
+    } elseif ($type == TYPE_DELETE) {
+        $log_str = "エントリの削除";
+        $log_str_eng = "Delete entry";
+        $r = @ldap_delete($ds, $conv_dn);
+    } elseif ($type == TYPE_ADD_ATTRIBUTE) {
+        $log_str = "属性の追加";
+        $log_str_eng = "Add attribution";
+        $r = @ldap_mod_add($ds, $conv_dn, $data);
+    } elseif ($type == TYPE_REPLACE_ATTRIBUTE) {
+        $log_str = "属性の追加";
+        $log_str_eng = "Add attribution";
+        $r = @ldap_mod_add($ds, $conv_dn, array($data[0] => $data[2]));
+    } elseif ($type == TYPE_MODIFY_DELETE) {
+        $log_str = "エントリの変更";
+        $log_str_eng = "Modify entry";
+        $r = @ldap_modify($ds, $conv_dn, $data[0]);
+    }
+
+    if ($r === FALSE) {
+        $errno = ldap_errno($ds);
+
+        /* すでに存在している */
+	if ($errno == LDAP_ALREADY_EXISTS) {
+            $err_msg = sprintf($msgarr['03009'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03009'][LOG_MSG], $dn);
+            return (LDAP_ERR_DUPLICATE);
+        }
+        /* 見つからない */
+	if ($errno == LDAP_NO_SUCH_OBJECT) {
+            $err_msg = sprintf($msgarr['03004'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03004'][LOG_MSG], $dn);
+            return (LDAP_ERR_NODATA);
+        }
+        /* すでに存在している(属性値) */
+	if ($errno == LDAP_EXISTS_VALUE) {
+            $err_msg = sprintf($msgarr['03010'][SCREEN_MSG], $dn);
+            $log_msg = sprintf($msgarr['03010'][LOG_MSG], $dn);
+            return (LDAP_ERR_DUPLICATE);
+        }
+
+        if ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03011'][SCREEN_MSG], $log_str, $dn);
+            $log_msg = sprintf($msgarr['03011'][LOG_MSG], $log_str_eng, $dn);
+        } else {
+            $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03012'][SCREEN_MSG], $log_str, $error, $dn);
+            $log_msg = sprintf($msgarr['03012'][LOG_MSG], $log_str_eng, $error, $dn);
+	}
+
+	if ($type == TYPE_ADD || $type == TYPE_ADD_ATTRIBUTE ||
+            $type == TYPE_REPLACE_ATTRIBUTE) {
+            return (LDAP_ERR_ADD);
+	} elseif ($type == TYPE_MODIFY || $type == TYPE_MODIFY_DELETE){
+            return (LDAP_ERR_MOD);
+	} elseif ($type == TYPE_DELETE){
+            return (LDAP_ERR_DEL);
+	}
+    }
+    /* 置換の場合は削除 */
+    if ($type == TYPE_REPLACE_ATTRIBUTE) {
+        return del_attribute($ds, $dn, array($data[0] => $data[1]));
+    /* 修正削除の場合は削除 */
+    } else if ($type == TYPE_MODIFY_DELETE) {
+        return del_attribute($ds, $dn, $data[1]);
+    }
+
+    return (LDAP_OK);
+}
+/***************************************************************************
+ * ldap_scope_search()
+ * 
+ * $typeで指定されたサーチスコープでサーチをする。
+ *
+ * [引数]
+ *	文字列 		$ds		LDAPリンクID	
+ *	文字列 		$basedn		基点エントリのDN
+ *	配列 		$attrs		必要な要素のテーブル 
+ *	文字列 		$filter		検索フィルタ	
+ *   	文字列 		$type	 	サーチスコープの型	
+ * [返り値]
+ *	FALSE	サーチエラー 
+ *	$sr	サーチ結果ID 
+ ***************************************************************************/
+function ldap_scope_search($ds, $basedn, $attrs, $filter, $type)
+{
+    $basedn = mb_convert_encoding($basedn, LDAP_ENCODING, PG_ENCODING);
+
+    if (count($attrs) == 0) {
+	switch ($type) {
+	    case TYPE_ONELEVEL:
+	        $sr = @ldap_list($ds, $basedn, $filter, array());
+		break;	
+	    case TYPE_ONEENTRY:
+	        $sr = @ldap_read($ds, $basedn, $filter);
+		break;
+	    case TYPE_SUBTREE:
+	        $sr = @ldap_search($ds, $basedn, $filter);
+		break;
+	}
+    } else {
+	switch ($type) {
+	    case TYPE_ONELEVEL:
+	        $sr = @ldap_list($ds, $basedn, $filter, $attrs);
+	        break;
+	    case TYPE_ONEENTRY:
+	        $sr = @ldap_read($ds, $basedn, $filter, $attrs);
+		break;
+	    case TYPE_SUBTREE:
+	        $sr = @ldap_search($ds, $basedn, $filter, $attrs);
+		break;
+	}
+    }
+    return ($sr);
+}
+
+/***************************************************************************
+ * set_data()
+ * 
+ * 検索した結果から得られる必要要素を連想配列(&$data)に格納する。
+ *
+ * [引数]
+ *	文字列 		$ds		LDAPリンクID	
+ *	文字列 		$sr		サーチ結果ID	
+ *	配列 		$attrs		必要な要素のテーブル 
+ *      配列            $s_attrs        小文字のキーテーブル
+ *	文字列 		$type	 	サーチスコープの型	
+ *	連想配列	&$data 		必要な要素データの格納先
+ *	文字列		$basedn		ベースDN 
+ * [返り値]
+ *	LDAP_OK		正常 
+ *	LDAP_ERR_SEARCH	サーチエラー 
+ *	LDAP_ERR_NODATA	エントリが存在しない
+ *	LDAP_ERR_OTHER	その他のエラー	
+ ***************************************************************************/
+function set_data($ds, $sr, $attrs, $s_attrs, $type, &$data, $basedn) 
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    if (count($attrs) == 0) {
+        $attr_assign = TRUE;
+    } else {
+        $attr_assign = FALSE;
+    }
+
+    /* エントリ数を数える */
+    $entry_cnt = @ldap_count_entries($ds, $sr);
+    if ($entry_cnt === FALSE) {
+	$errno = ldap_errno($ds);
+	if ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03013'][SCREEN_MSG], $basedn);
+            $log_msg = sprintf($msgarr['03013'][LOG_MSG], $basedn);
+	} else {
+            $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03014'][SCREEN_MSG], $error, $basedn);
+            $log_msg = sprintf($msgarr['03014'][LOG_MSG], $error, $basedn);
+	}
+        return (LDAP_ERR_NODATA);
+
+    } elseif ($entry_cnt == 0) { 
+        $err_msg = sprintf($msgarr['03004'][SCREEN_MSG], $basedn);
+        $log_msg = sprintf($msgarr['03004'][LOG_MSG], $basedn);
+        return (LDAP_ERR_NODATA);
+    }
+
+    $entry_id = @ldap_first_entry($ds, $sr);
+    if ($entry_id === FALSE) {
+        $errno = ldap_errno($ds);
+	if ($errno == LDAP_SUCCESS) {
+            $err_msg = sprintf($msgarr['03013'][SCREEN_MSG], $basedn);
+            $log_msg = sprintf($msgarr['03013'][LOG_MSG], $basedn);
+	} else {
+            $error = ldap_error($ds);
+            $err_msg = sprintf($msgarr['03014'][SCREEN_MSG], $error, $basedn);
+            $log_msg = sprintf($msgarr['03014'][LOG_MSG], $error, $basedn);
+	}
+        return (LDAP_ERR_NODATA);
+    }
+
+    for ($j = 0 ; $entry_id ; $j++) {
+	$dn = @ldap_get_dn($ds, $entry_id);
+	if ($dn === FALSE) {
+	    $errno = ldap_errno($ds);
+	    if ($errno == LDAP_SUCCESS) {
+                $err_msg = sprintf($msgarr['03015'][SCREEN_MSG], $basedn);
+                $log_msg = sprintf($msgarr['03015'][LOG_MSG], $basedn);
+	    } else {
+                $error = ldap_error($ds);
+                $err_msg = sprintf($msgarr['03016'][SCREEN_MSG], $error, $basedn);
+                $log_msg = sprintf($msgarr['03016'][LOG_MSG], $error, $basedn);
+	    }
+            return (LDAP_ERR_OTHER);
+	}
+	$data[$j]["dn"] = preg_replace("/, +/", ",", $dn);
+
+	/* アトリビュートが指定されなかった時の処理 */
+	if ($attr_assign) {
+            /* エントリ情報 */
+  	    $attri = @ldap_get_attributes($ds, $entry_id); 
+	    if ($attri === FALSE) {
+	        $errno = ldap_errno($ds);
+	        if ($errno == LDAP_SUCCESS) {
+                    $err_msg = sprintf($msgarr['03017'][SCREEN_MSG], $basedn);
+                    $log_msg = sprintf($msgarr['03017'][LOG_MSG], $basedn);
+	        } else {
+                    $error = ldap_error($ds);
+                    $err_msg = sprintf($msgarr['03018'][SCREEN_MSG], $error, $basedn);
+                    $log_msg = sprintf($msgarr['03018'][LOG_MSG], $error, $basedn);
+	        }
+                return (LDAP_ERR_OTHER);
+	    }
+
+
+        /* エントリ情報 */
+        $attri = @ldap_get_attributes($ds, $entry_id);
+        $s_attrs = $attri;
+        $attrs = $attri;
+        $attrs_cnt = $attri["count"];
+
+	} else {
+	    /* アトリビュートが指定された時の処理 */
+            /* 要素数 */
+	    $attrs_cnt = count($attrs);
+	}
+
+	    for ($i = 0; $i < $attrs_cnt; $i++) {
+                /* 属性の値 */
+	        $value = @ldap_get_values_len($ds, $entry_id, $s_attrs[$i]);
+		if ($value === FALSE) {
+                    $errno = ldap_errno($ds);
+		    if ($errno == LDAP_DECODING_ERROR) {
+		        $data[$j][$attrs[$i]][$k] = "";
+		    } elseif($errno == LDAP_SUCCESS) {
+                        $err_msg = sprintf($msgarr['03017'][SCREEN_MSG], $basedn);
+                        $log_msg = sprintf($msgarr['03017'][LOG_MSG], $basedn);
+	            } else {
+                        $error = ldap_error($ds);
+                        $err_msg = sprintf($msgarr['03018'][SCREEN_MSG], $error, $basedn);
+                        $log_msg = sprintf($msgarr['03018'][LOG_MSG], $error, $basedn);
+	            }
+                    return (LDAP_ERR_OTHER);
+		}
+
+		for ($k = 0; $k < $value["count"]; $k++ ) {
+		    $data[$j][$attrs[$i]][$k] = $value[$k];	
+		}
+	    }
+        $entry_id = @ldap_next_entry($ds, $entry_id);
+    }
+    return (LDAP_OK);
+}
+
+/****************************************************************************
+ * filter_escape()
+ * 
+ * フィルタのエスケープ
+ *
+ * [引数]
+ *	文字列 		$str
+ * [返り値]
+ *	エスケープ文字列
+ ***************************************************************************/
+function filter_escape($str)
+{
+    $trans = array("*" => "\\*",
+                   "(" => "\\(",
+                   ")" => "\\)",
+                   "\\" => "\\\\");
+
+    return strtr($str, $trans);
+}
+
+?>

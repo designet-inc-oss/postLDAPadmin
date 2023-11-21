@@ -1,0 +1,2367 @@
+<?php
+/*
+ * postLDAPadmin
+ *
+ * Copyright (C) 2006,2007 DesigNET, INC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
+/***********************************************************
+ * ユーザアカウント処理用ライブラリ
+ *
+ * $RCSfile$
+ * $Revision$
+ * $Date$
+ **********************************************************/
+/* CSV一括処理用結果表示画面のメッセージ形式 */
+define("CSV_OK_MSG", "%08d %s OK %s<br>\n");
+define("CSV_NG_MSG", "%08d %s NG %s<br>\n");
+
+/* 最大ユーザ表示件数 */
+define("MAXUCOUNT", 9999);
+/* 最大ポート番号 */
+define("MAXPORT", 65535);
+/* 最大メールアドレス長 */
+define("MAXMAIL", 256);
+/* 最大ユーザ名 */
+define("MAXUID", 32);
+/* 最大エイリアス名 */
+define("MAXNAME", 32);
+/* quota最大入力可能文字数 */
+define("MAXQUOTASIZE", 12);
+/* quota最大入力可能文字数 */
+define("MAXFORWARDNUMSIZE", 100);
+/* postLDAPadminスキーマ名 */
+define("PLAOC", "postLDAPadmin");
+/* 追加用DN */
+define("ADD_DN", "mail=%s,%s,%s");
+/* エントリ検索用DN */
+define("SEARCH_DN", "%s,%s");
+/* フォーム作成モード */
+define("ADD_MODE", 0);
+define("POST_ADD_MODE", 1);
+define("MOD_MODE", 2);
+define("POST_MOD_MODE", 3);
+/* LDAP return code */
+define("LDAP_NOUSER", 0);
+define("LDAP_FOUNDUSER", 1);
+define("LDAP_ERRUSER", 2);
+define("LDAP_FOUNDALIAS", 3);
+define("LDAP_FOUNDOTHER", 4);
+// forwardconfがoff
+define("FORWARD_OFF", "0");
+
+/* 検索結果表示用列数(デフォルト) */
+define("COLUM_DEF", 5);
+
+/* エントリ削除用フィルタ */
+define("DEL_FILTER", "(objectClass=*)");
+
+/* 返り値 */
+define("FUNC_TRUE",   "1");
+define("FUNC_FALSE",  "0");
+define("FUNC_SYSERR", "-1");
+
+/***********************************************************
+ * check_userdata
+ *
+ * ユーザデータの入力値チェック
+ *
+ * [引数]
+ *        &$data     入力データ
+ *
+ * [返り値]
+ *        TRUE       正常
+ *        FALSE      エラー
+ *
+ **********************************************************/
+function check_userdata(&$data)
+{
+    global $msgarr;
+    global $web_conf;
+    global $err_msg;
+    global $log_msg;
+    global $url_data;
+    global $domain;
+
+    /* ユーザ名がメールアドレスの場合 */
+    if (filter_var($data["uid"], FILTER_VALIDATE_EMAIL)) {
+        $ret = explode('@', $data["uid"]);
+
+        /* ドメインのチェック */
+        if ($ret[1] !== $domain) {
+            $errmsg = $msgarr['26015'][SCREEN_MSG];
+            $logmsg = $msgarr['26015'][LOG_MSG];
+
+            return FALSE;
+        }
+
+        $data["uid"] = $ret[0];
+    }
+
+    /* ユーザ名のチェック(必須) */
+    if ($data["uid"] == "") {
+        $err_msg = $msgarr['01001'][SCREEN_MSG];
+        $log_msg = $msgarr['01001'][LOG_MSG];
+        return FALSE;
+    }
+    if (check_name($data["uid"], MAXUID) === FALSE) {
+        return FALSE;
+    }
+ 
+    /* パスワードのチェック(必須) */
+    if ($web_conf['global']['webauthmode'] === WEBAUTHMODE_OFF || $data["pass"] !== '') {
+        if (check_passwd($data["pass"], (int)$web_conf["global"]["minpasswordlength"], (int)$web_conf["global"]["maxpasswordlength"]) === FALSE) {
+            return FALSE;
+        }
+    }
+
+    /* メールボックス容量のチェック */
+    if (check_diskquota($data["quota"]) === FALSE) {
+        return FALSE;
+    }
+
+    /* メールエイリアスのチェック */
+    if ($data["alias"] != "") {
+        if ($data["alias"] == $data["uid"]) {
+            $err_msg = $msgarr['01002'][SCREEN_MSG];
+            $log_msg = $msgarr['01002'][LOG_MSG];
+            return FALSE;
+        }
+        if (check_name($data["alias"], MAXNAME) === FALSE) {
+            $err_msg = $msgarr['01003'][SCREEN_MSG];
+            $log_msg = $msgarr['01003'][LOG_MSG];
+            return FALSE;
+        }
+    }
+
+    /* メール転送アドレスのチェック */
+    if ($data["transes"][0] != "") {
+        if (check_mail($data["transes"][0]) === FALSE) {
+            $err_msg = $msgarr['01004'][SCREEN_MSG];
+            $log_msg = $msgarr['01004'][LOG_MSG];
+            return FALSE;
+        }
+        /* メール保存設定チェック */
+        if (!isset($data["save"])) {
+            $err_msg = $msgarr['01005'][SCREEN_MSG];
+            $log_msg = $msgarr['01005'][LOG_MSG];
+            return FALSE;
+        } elseif (check_flg($data["save"]) === FALSE) {
+            $err_msg = $msgarr['01006'][SCREEN_MSG];
+            $log_msg = $msgarr['01006'][LOG_MSG];
+            return FALSE;
+        }
+    }
+
+    // forwardconfがonの時はオーダーとアーティクルのチェックも行う
+    if ($web_conf[$url_data['script']]['forwardconf'] === FORWARD_ON) {
+        // オーダーのチェック
+        if ($data["order"] !== "") {
+            if (check_csv_order($data["order"]) === FALSE) {
+                $err_msg = $msgarr['01024'][SCREEN_MSG];
+                $log_msg = $msgarr['01024'][LOG_MSG];
+                return FALSE;
+            }
+        }
+
+        // アーティクルのチェック
+        if ($data["article"] !== "") {
+            if (check_csv_article($data["article"]) === FALSE) {
+                $err_msg = $msgarr['01025'][SCREEN_MSG];
+                $log_msg = $msgarr['01025'][LOG_MSG];
+                return FALSE;
+            }
+        }
+    }
+
+    return TRUE;
+
+}
+
+/***********************************************************
+ * check_csv_trans
+ *
+ * ユーザの転送アドレスのチェック
+ *
+ * [引数]
+ *        &$data     入力データ
+ *
+ * [返り値]
+ *        TRUE       正常
+ *        FALSE      エラー
+ *
+ **********************************************************/
+function check_csv_trans(&$data)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+
+    /* メール転送アドレスのチェック */
+    if ($data['transes'][0] != "") {
+        if ($data['transes'][0] == $data["mail"]) {
+            $err_msg = $msgarr['01007'][SCREEN_MSG];
+            $log_msg = $msgarr['01007'][LOG_MSG];
+            return FALSE;
+        }
+        if (isset($data["mailalias"]) &&
+            $data['transes'][0] == $data["mailalias"]) {
+            $err_msg = $msgarr['01008'][SCREEN_MSG];
+            $log_msg = $msgarr['01008'][LOG_MSG];
+            return FALSE;
+        }
+        if ($data["save"] == ON) {
+            /* メールを残す設定の場合は転送アドレスに自メールアドレスを追加 */
+            array_push($data["transes"], $data["mail"]);
+        }
+    }
+
+    return TRUE;
+}
+
+/***********************************************************
+ * check_add_data
+ *
+ * ユーザ追加時の入力値チェック
+ *
+ * [引数]
+ *        &$data     入力データ
+ *        $csvcheck  CSVファイル用のチェックフラグ(重複チェックするかどうか)
+ * [返り値]
+ *       FUNC_TRUE      正常
+ *       FUNC_FALSE     異常
+ *       FUNC_SYSERR    異常が発生した
+ *
+ **********************************************************/
+function check_add_data(&$data, $csvcheck = FALSE)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $web_conf;
+    $transes = array();
+
+    /* ユーザ名のチェック(必須) */
+    if ($data["uid"] == "") {
+        $err_msg = $msgarr['01001'][SCREEN_MSG];
+        $log_msg = $msgarr['01001'][LOG_MSG];
+        return FUNC_FALSE;
+    }
+    if (check_name($data["uid"], MAXUID) === FALSE) {
+        return FUNC_FALSE;
+    }
+
+    if ($web_conf['global']['webauthmode'] === WEBAUTHMODE_OFF) {
+        /* パスワードのチェック(必須) */
+        if (check_passwd($data["pass"], (int)$web_conf["global"]["minpasswordlength"], (int)$web_conf["global"]["maxpasswordlength"]) === FALSE) {
+            return FUNC_FALSE;
+        }
+    }
+
+    /* メールボックス容量のチェック */
+    if (check_diskquota($data["quota"]) === FALSE) {
+        return FUNC_FALSE;
+    }
+
+    /* メールエイリアスのチェック */
+    if ($data["alias"] != "") {
+        if ($data["alias"] == $data["uid"]) {
+            $err_msg = $msgarr['01002'][SCREEN_MSG];
+            $log_msg = $msgarr['01002'][LOG_MSG];
+            return FUNC_FALSE;
+        }
+        if (check_name($data["alias"], MAXNAME) === FALSE) {
+            $err_msg = $msgarr['01003'][SCREEN_MSG];
+            $log_msg = $msgarr['01003'][LOG_MSG];
+            return FUNC_FALSE;
+        }
+    }
+
+    /* パスワード・パスワード(確認)のチェック */
+    if ($data["pass"] != $data["re_pass"]) {
+        $err_msg = $msgarr['01010'][SCREEN_MSG];
+        $log_msg = $msgarr['01010'][LOG_MSG];
+        return FUNC_FALSE;
+    }
+
+    /* メールアドレスの作成 */
+    $mail = $data["uid"] . "@" . $domain;
+
+    /* ユーザ名の重複チェック */
+    if ($csvcheck === FALSE) {
+        $ret = check_duplicate($mail);
+        if ($ret == LDAP_FOUNDUSER || $ret == LDAP_FOUNDALIAS ||
+            $ret == LDAP_FOUNDOTHER) {
+            $err_msg = $msgarr['01011'][SCREEN_MSG];
+            $log_msg = $msgarr['01011'][LOG_MSG];
+            return FUNC_FALSE;
+        } elseif ($ret == LDAP_ERRUSER) {
+            return FUNC_SYSERR;
+        }
+    }
+    $data["mail"] = $mail;
+
+    /* メール転送アドレスのチェック */
+    if (isset($data["trans"])) {
+        if ($data["trans"] != "") {
+            if (check_mail ($data["trans"]) === FALSE) {
+                $err_msg = $msgarr['01004'][SCREEN_MSG];
+                $log_msg = $msgarr['01004'][LOG_MSG];
+                return FUNC_FALSE;
+            }
+            /* メール保存設定チェック */
+            if (!isset($data["save"])) {
+                $err_msg = $msgarr['01005'][SCREEN_MSG];
+                $log_msg = $msgarr['01005'][LOG_MSG];
+                return FUNC_FALSE;
+            } elseif (check_flg($data["save"]) === FALSE) {
+                $err_msg = $msgarr['01006'][SCREEN_MSG];
+                $log_msg = $msgarr['01006'][LOG_MSG];
+                return FUNC_FALSE;
+            }
+        }
+    }
+
+    /* メールエイリアスの重複チェック */
+    if ($data["alias"] != "") {
+        $data["mailalias"] = $data["alias"] . "@" . $domain;
+        $ret = check_duplicate($data["mailalias"]);
+        if ($ret == LDAP_FOUNDUSER || $ret == LDAP_FOUNDALIAS ||
+            $ret == LDAP_FOUNDOTHER) {
+            $err_msg = $msgarr['01012'][SCREEN_MSG];
+            $log_msg = $msgarr['01012'][LOG_MSG];
+            return FUNC_FALSE;
+        } elseif ($ret == LDAP_ERRUSER) {
+            return FUNC_SYSERR;
+        }
+    }
+
+
+    /* メール転送アドレスのチェック */
+    if (isset($data['trans'])) {
+        if ($data['trans'] != "") {
+            if ($data['trans'] == $mail) {
+                $err_msg = $msgarr['01007'][SCREEN_MSG];
+                $log_msg = $msgarr['01007'][LOG_MSG];
+                return FUNC_FALSE;
+            }
+            if (isset($data["mailalias"]) && $data['trans'] == $data["mailalias"]) {
+                $err_msg = $msgarr['01008'][SCREEN_MSG];
+                $log_msg = $msgarr['01008'][LOG_MSG];
+                return FUNC_FALSE;
+            }
+            if (isset ($data["save"]) && $data["save"] == ON) {
+                /* メールを残す設定の場合は転送アドレスに自メールアドレスを追加 */
+                array_push($transes, $mail);
+            }
+            if ($data["trans"] != "") {
+                array_push($transes, $data["trans"]);
+            }
+
+            $data["transes"] = $transes;
+        }
+    }
+    return FUNC_TRUE;
+}
+
+/*********************************************************
+ * check_mod_data
+ *
+ * 入力フォームの形式チェック
+ *
+ * [引数]
+ *          &$data     入力データ
+ * [返り値]
+ *          TRUE       正常
+ *          FALSE      エラー
+ *
+ **********************************************************/
+function check_mod_data(&$data)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $ldapdata;
+    global $web_conf;
+    global $url_data;
+    $transes = array();
+
+    $mail = $data['mail'];
+
+    if ($web_conf['global']['webauthmode'] === WEBAUTHMODE_OFF) {
+        if ((!isset($ldapdata[0]['userPassword'][0])) || $data["pass"] != ""
+                                                   || $data["re_pass"] != "") {
+            /* パスワードが設定されていないエントリであればパスワードは必須 */
+            if ($data["pass"] == "") {
+                $err_msg = $msgarr['01013'][SCREEN_MSG];
+                $log_msg = $msgarr['01013'][LOG_MSG];
+                return FALSE;
+            }
+            /* パスワードのチェック(必須) */
+            if (check_passwd($data["pass"], (int)$web_conf["global"]["minpasswordlength"], 
+                (int)$web_conf["global"]["maxpasswordlength"]) === FALSE) {
+                return FALSE;
+            }
+            /* パスワード・パスワード(確認)の一致チェック */
+            if ($data["pass"] != $data["re_pass"]) {
+                $err_msg = $msgarr['01010'][SCREEN_MSG];
+                $log_msg = $msgarr['01010'][LOG_MSG];
+                return FALSE;
+            }
+        }
+    }
+
+    /* メールボックス容量のチェック(必須) */
+    if ($data["quota"] != "") {
+        if (check_diskquota($data["quota"]) === FALSE) {
+            return FALSE;
+        }
+    }
+
+    /* メールエイリアスのチェック */
+    if ($data["alias"] != "") {
+        if ($data["alias"] == $data["uid"]) {
+            $err_msg = $msgarr['01002'][SCREEN_MSG];
+            $log_msg = $msgarr['01002'][LOG_MSG];
+            return FALSE;
+        }
+        if (check_name($data["alias"], MAXNAME) === FALSE) {
+            $err_msg = $msgarr['01009'][SCREEN_MSG];
+            $log_msg = $msgarr['01009'][LOG_MSG];
+            return FALSE;
+        }
+    }
+
+    /* メール転送アドレスのチェック */
+    if (isset($data["trans"])) {
+        if ($data["trans"] != "") {
+            if (check_mail ($data["trans"]) === FALSE) {
+                $err_msg = $msgarr['01004'][SCREEN_MSG];
+                $log_msg = $msgarr['01004'][LOG_MSG];
+                return FALSE;
+            }
+            /* メール保存設定チェック */
+            if (!isset($data["save"])) {
+                $err_msg = $msgarr['01005'][SCREEN_MSG];
+                $log_msg = $msgarr['01005'][LOG_MSG];
+                return FALSE;
+            } elseif (check_flg($data["save"]) === FALSE) {
+                $err_msg = $msgarr['01006'][SCREEN_MSG];
+                $log_msg = $msgarr['01006'][LOG_MSG];
+                return FALSE;
+            }
+        }
+    }
+
+    /* メールエイリアスの重複チェック */
+    if ($data["alias"] != "") {
+        $data["mailalias"] = $data["alias"] . "@" . $domain;
+        /* エイリアス書き換えフラグ：デフォルトでON */
+        $chflg = ON;
+
+        if (isset($ldapdata[0]["mailAlias"][0])) {
+            /* エイリアスに変更なければ書き換えフラグ:OFF */
+            if ($data["mailalias"] == $ldapdata[0]["mailAlias"][0]) {
+                $chflg = OFF;
+            }
+        }
+
+        /* エイリアス変更あれば、重複チェック */
+        if ($chflg == ON) {
+            $ret = check_duplicate($data["mailalias"]);
+            if ($ret == LDAP_FOUNDUSER || $ret == LDAP_FOUNDALIAS ||
+                $ret == LDAP_FOUNDOTHER) {
+                $err_msg = $msgarr['01012'][SCREEN_MSG];
+                $log_msg = $msgarr['01012'][LOG_MSG];
+                return FALSE;
+            } elseif ($ret == LDAP_ERRUSER) {
+                return FALSE;
+            }
+        }
+    }
+
+    // メール転送アドレスのセット
+    // forwardconfがoffの場合に設定
+    if ($web_conf[$url_data['script']]['forwardconf'] === FORWARD_OFF) {
+        if (isset($data['trans'])) {
+            if ($data['trans'] != "") {
+                if ($data['trans'] == $mail) {
+                    $err_msg = $msgarr['01007'][SCREEN_MSG];
+                    $log_msg = $msgarr['01007'][LOG_MSG];
+                    return FALSE;
+                }
+                if (isset($data["mailalias"]) && $data['trans'] == $data["mailalias"]) {
+                    $err_msg = $msgarr['01008'][SCREEN_MSG];
+                    $log_msg = $msgarr['01008'][LOG_MSG];
+                    return FALSE;
+                }
+                if ($data["save"] == ON) {
+                    /* メールを残す設定の場合は転送アドレスに自メールアドレスを追加 */
+                    array_push($transes, $mail);
+                }
+                if ($data["trans"] != "") {
+                    array_push($transes, $data["trans"]);
+                }
+    
+                $data["transes"] = $transes;
+            }
+        }
+
+    // forwardconfがonの状態でmailForwardingAddrがある場合は要素をキープ
+    } else {
+        if (isset($ldapdata[0]['mailForwardingAddr'])) {
+            $data["transes"] = $ldapdata[0]['mailForwardingAddr'];
+        }
+    }
+
+    return TRUE;
+}
+
+/***********************************************************
+ * add_user
+ *
+ * ユーザデータを追加する
+ *
+ * [引数]
+ *       $data    追加ユーザのデータが格納された連想配列
+ *
+ * [返り値]
+ *       TRUE     正常
+ *       FALSE    エラー
+ *
+ **********************************************************/
+function add_user($data, &$result = '')
+{
+    global $web_conf;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $attr;
+    global $url_data;
+
+    /* 登録用データの生成 */
+    $user = $data["uid"];
+    if ($data["pass"] != "") {
+        $pass = make_passwd($data["pass"]);
+    }
+
+    $mail = $data["mail"];
+    $alias = $data["alias"];
+    $maildir = $web_conf[$url_data["script"]]["basemaildir"] . "/" . $user . "/";
+    $objectclass = mk_oc_list($web_conf[$url_data['script']]['ldapobjectclass']);
+
+    // LDAP登録する必須属性のセット
+    if ($web_conf['global']['webauthmode'] === WEBAUTHMODE_OFF) {
+        $attr = array("objectClass" => $objectclass,
+                      "uid" => $data["uid"],
+                      "userPassword" => $pass,
+                      "mail" => $mail,
+                      "mailDirectory" => $maildir);
+    } else {
+        $attr = array("objectClass" => $objectclass,
+                      "uid" => $data["uid"],
+                      "mail" => $mail,
+                      "mailDirectory" => $maildir);
+
+        /* パスワードが空じゃない場合 */
+        // if ($pass != "") {
+        //     $attr["userPassword"] = $pass;
+        // }
+    }
+
+    // 必須ではない属性のセット
+    if ($data["quota"] != "") {
+        $attr["quotaSize"] = $data["quota"];
+    }
+    if (isset($data["mailalias"])) {
+        $attr["mailAlias"] = $data["mailalias"];
+    }
+    if (isset ($data["transes"]) && count($data["transes"]) != 0) {
+        $attr["mailForwardingAddr"] = $data["transes"];
+    }
+
+    /* LDAP登録 */
+    $add_dn = sprintf(ADD_DN, $mail, $web_conf[$url_data["script"]]["ldapusersuffix"], 
+                      $web_conf[$url_data["script"]]["ldapbasedn"]);
+
+    $ret = LDAP_add_entry($add_dn, $attr);
+    if ($ret != LDAP_OK) {
+        return FALSE;
+    }
+
+    $result = $add_dn;
+
+    return TRUE;
+}
+
+/***********************************************************
+ * add_user_connect
+ *
+ * ユーザデータを追加する(LDAP接続しない)
+ *
+ * [引数]
+ *       $data    追加ユーザのデータが格納された連想配列
+ *       $ds      LDAPリンクID
+ *
+ * [返り値]
+ *       TRUE     正常
+ *       FALSE    エラー
+ *
+ **********************************************************/
+function add_user_connect($data, $ds)
+{
+    global $web_conf;
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $attr;
+    global $url_data;
+
+    /* 登録用データの生成 */
+    $user = $data["uid"];
+    if ($data["pass"] != "") {
+        $pass = make_passwd($data["pass"]);
+    }
+    if ($pass === FALSE) {
+        return FALSE;
+    }
+    $mail = $data["mail"];
+    $alias = $data["alias"];
+    $maildir = $web_conf[$url_data["script"]]["basemaildir"] . "/" . $user . "/";
+    $objectclass = mk_oc_list($web_conf[$url_data['script']]['ldapobjectclass']);
+
+    /* LDAP登録する必須属性のセット */
+    if ($web_conf['global']['webauthmode'] === WEBAUTHMODE_OFF) {
+        $attr = array("objectClass" => $objectclass,
+                      "uid" => $data["uid"],
+                      "userPassword" => $pass,
+                      "mail" => $mail,
+                      "mailDirectory" => $maildir);
+    } else {
+        $attr = array("objectClass" => $objectclass,
+                      "uid" => $data["uid"],
+                      "mail" => $mail,
+                      "mailDirectory" => $maildir);
+
+        /* パスワードが空じゃないの場合 */
+        // if ($pass != "") {
+        //     $attr["userPassword"] = $pass;
+        // }
+    }
+
+    /* 必須ではない属性のセット */
+    if ($data["quota"] != "") {
+        $attr["quotaSize"] = $data["quota"];
+    }
+    if (isset($data["mailalias"])) {
+        $attr["mailAlias"] = $data["mailalias"];
+    }
+    if ($data["transes"][0] != "") {
+        $attr["mailForwardingAddr"] = $data["transes"];
+    }
+
+    // forwardconfがonの場合はオーダーとアーティクルをセット
+    if ($web_conf[$url_data['script']]['forwardconf'] === FORWARD_ON) {
+        // オーダー、アーティクルをセットして、mailForwardingAddrを削除
+        if ($data["order"][0] !== "") {
+            $attr["mailFilterOrder"] = $data["order"];
+        }
+        if ($data["article"][0] !== "") {
+            $attr["mailFilterArticle"] = explode(":", $data["article"]);
+        }
+        unset($attr["mailForwardingAddr"]);
+    }
+
+    /* LDAP登録 */
+    $add_dn = sprintf(ADD_DN, $mail, $web_conf[$url_data["script"]]["ldapusersuffix"], 
+                      $web_conf[$url_data["script"]]["ldapbasedn"]);
+    $ret = LDAP_add_entry_connect($add_dn, $ds, $attr);
+    if ($ret != LDAP_OK) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * mod_user
+ *
+ * ユーザ情報の修正
+ *
+ * [引数]
+ *          $data  ユーザ情報の格納された連想配列
+ * [返り値]
+ *          TRUE   正常
+ *          FALSE  エラー
+ *
+ **********************************************************/
+function mod_user($data)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $user;
+    global $ldapdata;
+    global $web_conf;
+    global $userdn;
+    global $url_data;
+
+    $enpass = "";
+
+    if (isset($data["mailalias"])) {
+        $alias = $data["mailalias"];
+    } else {
+        $alias = "";
+    }
+    if (isset($data["alias"])) {
+        $alias_name = $data["alias"];
+    } else {
+        $alias_name = "";
+    }
+    if (isset($data["transes"])) {
+        $transes = $data["transes"];
+    } else {
+        $transes = array();
+    }
+
+    /*パスワード暗号化作成*/
+    if ($data["pass"] != "") {
+        $enpass = make_passwd($data["pass"]);
+        if ($enpass === FALSE) {
+            return FALSE;
+        }
+        $attrs['userPassword'] = $enpass;
+    }
+
+    /* ディスク容量の変更、なければ削除 */
+    if ($data["quota"] != "") {
+        $attrs["quotaSize"] = $data["quota"];
+    } else {
+        $attrs["quotaSize"] = array();
+    }
+
+    /* あればメールエイリアスの変更、なければ削除 */
+    if ($alias != "") {
+        $attrs["mailAlias"] = $alias;
+    } else {
+        $attrs["mailAlias"] = array();
+    }
+
+    /* メール転送アドレスの格納 */
+    if (count($transes) != 0) {
+        $attrs["mailForwardingAddr"] = $transes;
+    } else {
+        $attrs["mailForwardingAddr"] = array();
+    }
+
+    // forwardconfがoffでmailFilterOrder、mailFilterArticleが存在すれば削除する
+    if ($web_conf[$url_data['script']]['forwardconf'] === FORWARD_OFF) {
+        if (isset($ldapdata[0]['mailFilterOrder'])) {
+            $attrs["mailFilterOrder"][0] = "";
+        }
+        if (isset($ldapdata[0]['mailFilterArticle'])) {
+            $attrs["mailFilterArticle"] = array();
+        }
+    }
+
+    /* メールディレクトリ属性を持たなければ作成 */
+    if (!isset($ldapdata[0]["mailDirectory"][0])) {
+        $attrs["mailDirectory"] = $web_conf[$url_data["script"]]["basemaildir"] . "/" . $user . "/";
+    }
+
+    /* LDAPデータの更新 */
+    $ret = LDAP_mod_entry($userdn, $attrs);
+    if ($ret !== LDAP_OK && $ret != LDAP_ERR_NOATTR) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * mod_user_connect
+ *
+ * ユーザ情報の修正(LDAP接続しない)
+ *
+ * [引数]
+ *          $data  ユーザ情報の格納された連想配列
+ *          $ds    LDAPリンクID
+ * [返り値]
+ *          TRUE   正常
+ *          FALSE  エラー
+ *
+ **********************************************************/
+function mod_user_connect($data, $ds)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $domain;
+    global $ldapdata;
+    global $web_conf;
+    global $userdn;
+    global $url_data;
+
+    $user = $data["uid"];
+    $enpass = "";
+
+    if (isset($data["mailalias"])) {
+        $alias = $data["mailalias"];
+    } else {
+        $alias = "";
+    }
+    if (isset($data["alias"])) {
+        $alias_name = $data["alias"];
+    } else {
+        $alias_name = "";
+    }
+    if ($data["transes"][0] != "") {
+        $transes = $data["transes"];
+    } else {
+        $transes = array();
+    }
+
+    /*パスワード暗号化作成*/
+    if ($data["pass"] != "") {
+        $enpass = make_passwd($data["pass"]);
+        if ($enpass === FALSE) {
+            return FALSE;
+        }
+        $attrs['userPassword'] = $enpass;
+    }
+
+    /* ディスク容量の変更、なければ削除 */
+    if ($data["quota"] != "") {
+        $attrs["quotaSize"] = $data["quota"];
+    } else {
+        $attrs["quotaSize"] = array();
+    }
+
+    /* あればメールエイリアスの変更、なければ削除 */
+    if ($alias != "") {
+        $attrs["mailAlias"] = $alias;
+    } else {
+        $attrs["mailAlias"] = array();
+    }
+
+    /* メール転送アドレスの格納 */
+    if (count($transes) != 0) {
+        $attrs["mailForwardingAddr"] = $transes;
+    } else {
+        $attrs["mailForwardingAddr"] = array();
+    }
+
+    // forwardconfがoffでmailFilterOrder、mailFilterArticleが存在すれば削除する
+    if ($web_conf[$url_data['script']]['forwardconf'] === FORWARD_OFF) {
+        if (isset($ldapdata[0]['mailFilterOrder'])) {
+            $attrs["mailFilterOrder"][0] = "";
+        }
+        if (isset($ldapdata[0]['mailFilterArticle'])) {
+            $attrs["mailFilterArticle"] = array();
+        }
+
+    // onの場合はmailFilterOrder、mailFilterArticleセット
+    } else {
+        // オーダー、アーティクルをセットして、mailForwardingAddrを削除
+        if ($data["order"][0] !== "") {
+            $attrs["mailFilterOrder"][0] = $data["order"];
+        } else {
+            $attrs["mailFilterOrder"] = array();
+        }
+        if ($data["article"][0] !== "") {
+            $attrs["mailFilterArticle"] = explode(":", $data["article"]);
+        } else {
+            $attrs["mailFilterArticle"] = array();
+        }
+        $attrs["mailForwardingAddr"] = array();
+    }
+
+    /* メールディレクトリ属性を持たなければ作成 */
+    if (!isset($ldapdata[0]["mailDirectory"][0])) {
+        $attrs["mailDirectory"] = $web_conf[$url_data["script"]]["basemaildir"] . "/" . $user . "/";
+    }
+
+    /* LDAPデータの更新 */
+    $ret = LDAP_mod_entry_connect($userdn, $ds, $attrs);
+    if ($ret !== LDAP_OK && $ret != LDAP_ERR_NOATTR) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+/*********************************************************
+ * del_user
+ *
+ * ユーザを削除する
+ *
+ * [引数]
+ *         $user    削除対象ユーザ
+ * [返り値]
+ *         TRUE     正常
+ *         FALSE    エラー
+ *
+ **********************************************************/
+function del_user($user)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    global $domain;
+    global $userdn;
+    global $ldapdata;
+    global $url_data;
+
+    $maildir = "";
+
+    $delmail = $user . "@" . $domain;
+
+    /* LDAPのエントリ削除 */
+    $ret = del_user_ldapdata($userdn);
+    if ($ret == LDAP_ERR_NODATA) {
+        /* 既に存在しない場合は正常 */
+        $err_msg = "";
+    } elseif ($ret != LDAP_OK) {
+        return FALSE;
+    }
+
+    /* メールディレクトリの存在チェック */
+    if (isset($ldapdata[0]['mailDirectory'][0])) {
+        $maildir = $ldapdata[0]['mailDirectory'][0];
+    }
+
+    if ($maildir !== "") {
+        /* メールディレクトリ削除コマンドを実行 */
+        $delcmd = $web_conf[$url_data['script']]['maildelcommand'] . 
+                  " " . $maildir . " > /dev/null 2>&1";
+        system ($delcmd, $cmd_st);
+        if ($cmd_st != 0) {
+            $err_msg = $msgarr['01014'][SCREEN_MSG];
+            $log_msg = sprintf($msgarr['01014'][LOG_MSG], $delcmd);
+            return FALSE;
+        }
+    }
+
+    /* メーリングリストアドレスも削除 */
+    $dn = sprintf(SEARCH_DN, $web_conf[$url_data["script"]]['ldaplistsuffix'], 
+                  $web_conf[$url_data['script']]['ldapbasedn']);
+    $filter = "(mailForwardingAddr=" . $delmail . ")";
+    $attrs = array();
+
+    $ret = main_get_entry($dn, $filter, $attrs, 
+                          $web_conf[$url_data['script']]['ldapscope'], $mldata);
+    if ($ret == LDAP_ERR_NODATA) {
+        /* 存在しない場合はなにもしない */
+        $err_msg = "";
+    } elseif ($ret != LDAP_OK) {
+        return FALSE;
+    } else {
+        /* 該当メールアドレスの属性を削除 */
+        for ($i = 0; isset($mldata[$i]["mail"][0]); $i++) {
+            $del_mldn = sprintf(ADD_DN, $mldata[$i]["mail"][0],
+                                $web_conf[$url_data['script']]['ldaplistsuffix'], 
+                                $web_conf[$url_data['script']]['ldapbasedn']);
+            $fwaddr = array();
+            $modaddr = array();
+
+            foreach ($mldata[$i]["mailForwardingAddr"] as $each) {
+                if ($each != $delmail) {
+                    array_push($fwaddr, $each);
+                }
+            }
+            $modaddr["mailForwardingAddr"] = $fwaddr;
+            $ret = LDAP_mod_entry($del_mldn, $modaddr);
+            if ($ret !== LDAP_OK && $ret != LDAP_ERR_NOATTR) {
+                return FALSE;
+            }
+            $log_tmp = sprintf($msgarr['01023'][LOG_MSG], $mldata[$i]["mail"][0]);
+            result_log(OPERATION . ":OK:" . $log_tmp);
+        }
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * del_user_connect
+ *
+ * ユーザを削除する
+ *
+ * [引数]
+ *         $user    削除対象ユーザ
+ *         $ds     LDAPリンクID
+ * [返り値]
+ *         TRUE     正常
+          FALSE    エラー
+ *
+ **********************************************************/
+function del_user_connect($user, $ds)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    global $domain;
+    global $userdn;
+    global $ldapdata;
+    global $url_data;
+
+    $maildir = "";
+
+    $delmail = $user . "@" . $domain;
+
+    /* LDAPのエントリ削除 */
+    $ret = LDAP_del_entry($userdn);
+    if ($ret == LDAP_ERR_NODATA) {
+        /* 既に存在しない場合は正常 */
+        $err_msg = "";
+    } elseif ($ret != LDAP_OK) {
+        return FALSE;
+    }
+
+    /* メールディレクトリの存在チェック */
+    if (isset($ldapdata[0]['mailDirectory'][0])) {
+        $maildir = $ldapdata[0]['mailDirectory'][0];
+    }
+    if ($maildir != "" && is_dir ($maildir)) {
+        /* メールディレクトリ削除コマンドを実行 */
+        $delcmd = $web_conf[$url_data['script']]['maildelcommand'] . 
+                  " " . $maildir . " > /dev/null 2>&1";
+        system ($delcmd, $cmd_st);
+        if ($cmd_st != 0) {
+            $err_msg = $msgarr['01014'][SCREEN_MSG];
+            $log_msg = sprintf($msgarr['01014'][LOG_MSG], $delcmd);
+            result_log (OPERATION . ":NG:" . $log_msg);
+            return FALSE;
+        }
+    }
+
+    /* メーリングリストアドレスも削除 */
+    $dn = sprintf(SEARCH_DN, $web_conf[$url_data['script']]['ldaplistsuffix'], 
+                  $web_conf[$url_data['script']]['ldapbasedn']);
+    $filter = "(mailForwardingAddr=" . $delmail . ")";
+    $attrs = array();
+
+    $ret = main_get_entry_connect($dn, $ds, $filter, $attrs,
+                                  $web_conf[$url_data['script']]['ldapscope'], $mldata);
+    if ($ret == LDAP_ERR_NODATA) {
+        /* 存在しない場合はなにもしない */
+        $err_msg = "";
+    } elseif ($ret != LDAP_OK) {
+        return FALSE;
+    } else {
+        /* 該当メールアドレスの属性を削除 */
+        for ($i = 0; isset($mldata[$i]["mail"][0]); $i++) {
+            $del_mldn = sprintf(ADD_DN, $mldata[$i]["mail"][0],
+                                $web_conf[$url_data['script']]['ldaplistsuffix'], 
+                                $web_conf[$url_data['script']]['ldapbasedn']);
+            $fwaddr = array();
+            $modaddr = array();
+
+            foreach ($mldata[$i]["mailForwardingAddr"] as $each) {
+                if ($each != $delmail) {
+                    array_push($fwaddr, $each);
+                }
+            }
+            $modaddr["mailForwardingAddr"] = $fwaddr;
+            $ret = LDAP_mod_entry_connect($del_mldn, $ds, $modaddr);
+            if ($ret !== LDAP_OK && $ret != LDAP_ERR_NOATTR) {
+                return FALSE;
+            }
+            $log_tmp = sprintf($msgarr['01023'][LOG_MSG], $mldata[$i]["mail"][0]);
+            result_log(OPERATION . ":OK:" . $log_tmp);
+        }
+    }
+    return TRUE;
+}
+
+/***********************************************************
+ * dgp_location_search()
+ *
+ * ロケーションを行う
+ *
+ * [引数]
+ *      $url
+ * [返り値]
+ *      なし
+ ************************************************************/
+function dgp_location_search($url, $msg = null)
+{
+    global $sesskey;
+    global $filter;
+    global $page;
+    global $form_name;
+    global $name_match;
+
+    output_http_header();
+    display_header();
+
+    print <<<EOD
+
+<body onload="dgpSubmit('$url')">
+処理中...
+<script type="text/javascript">
+<!--
+function dgpSubmit(url) {
+    document.common.action = url;
+    document.common.submit();
+}
+// -->
+</script>
+<form method="post" name="common">
+<input type="hidden" name="sk" value="$sesskey">
+<input type="hidden" name="page" value="$page">
+<input type="hidden" name="filter" value="$filter">
+<input type="hidden" name="form_name" value="$form_name">
+<input type="hidden" name="name_match" value="$name_match">
+
+EOD;
+
+    /* メッセージがある場合 */
+    if (!is_null($msg)) {
+        print <<<EOD
+<input type="hidden" name="msg" value="$msg">
+ 
+EOD;
+    }
+ 
+    print <<<EOD
+ 
+</form> 
+</body>
+</html>
+
+EOD;
+   exit;
+    
+}   
+
+/*********************************************************
+ * check_port()
+ *
+ * ポート番号チェック
+ *
+ * [引数]
+ *      $port           ポート番号
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_port($port)
+{
+    /* 半角数字のみ許可 */
+    $num = "0123456789";
+    if (strspn($port, $num) != strlen($port)) {
+        return FALSE;
+    }
+
+    /* 1から最大ポート番号まで */
+    if (($port < 1) || ($port > MAXPORT)) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_quota()
+ *
+ * クォータ単位チェック
+ *
+ * [引数]
+ *      $unit           クォータ単位
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_quota($unit)
+{
+    /* 設定ファイルのクォータ単位を小文字にする */
+    $unit = strtolower($unit);
+
+    /* 設定可能なクォータ単位名を配列に代入する */
+    $unit_data = array('b','kb','mb','gb');
+
+    /* 正しい単位が設定されているか調べる */
+    if (array_search($unit, $unit_data) === FALSE) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_num()
+ *
+ * quotaの桁数チェック
+ *
+ * [引数]
+ *      $size           quotaの桁数
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_num($size)
+{
+    /* 半角数字のみ許可 */
+    $num = "0123456789";
+    if (strspn($size, $num) != strlen($size)) {
+        return FALSE;
+    }
+    /* 1から最大入力可能文字数まで */
+    if (($size < 1) || ($size > MAXQUOTASIZE)) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_num_forward()
+ *
+ * forwardnumのチェック
+ *
+ * [引数]
+ *      $size           forward_numの桁数
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_num_forward($size)
+{
+    /* 半角数字のみ許可 */
+    $num = "0123456789";
+    if (strspn($size, $num) != strlen($size)) {
+        return FALSE;
+    }
+    /* 1から最大入力可能文字数まで */
+    if ($size < 1) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_scope()
+ *
+ * LDAP検索スコープチェック
+ *
+ * [引数]
+ *      $scope          検索スコープ
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_scope($scope)
+{
+    switch ($scope) {
+        case "base";
+            return TRUE;
+        case "one";
+            return TRUE;
+        case "sub";
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+/*********************************************************
+ * check_diskquota()
+ *
+ * ディスク容量チェック
+ *
+ * [引数]
+ *      $quota          ディスク容量
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_diskquota($quota)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 半角数字のみ許可 */
+    $num = "0123456789";
+    if (strspn($quota, $num) != strlen($quota)) {
+        $err_msg = $msgarr['01015'][SCREEN_MSG];
+        $log_msg = $msgarr['01015'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 1-最大ディスク容量値 */
+    if ($quota < 0) {
+        $err_msg = $msgarr['01015'][SCREEN_MSG];
+        $log_msg = $msgarr['01015'][LOG_MSG];
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_ucount()
+ *
+ * ユーザ表示件数チェック
+ *
+ * [引数]
+ *      $ucount         ユーザ表示件数
+ * [返り値]
+ *      TRUE            正常
+ *      FALSE           異常
+ **********************************************************/
+function check_ucount($ucount)
+{
+    /* 半角数字のみ許可 */
+    $num = "0123456789";
+    if (strspn($ucount, $num) != strlen($ucount)) {
+        return FALSE;
+    }
+
+    /* 1-最大ユーザ表示件数 */
+    if ($ucount < 1 || $ucount > MAXUCOUNT) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_name()
+ *
+ * ユーザ名チェック
+ *
+ * [引数]
+ *      $name        ユーザ名
+ *      $maxlen      最大文字数
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_name($name, $maxlen)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+
+    $letters = strlen($name);
+    if ($letters > $maxlen) {
+        $err_msg = $msgarr['01016'][SCREEN_MSG];
+        $log_msg = $msgarr['01016'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 半角英小文字、数字、記号[.-_]のみ許可 */
+    /* 先頭は数字または半角英文字 */
+    $num = "0123456789";
+    $sl = "abcdefghijklmnopqrstuvwxyz";
+    $sym = ".-_";
+    $allow_letter = $num . $sl . $sym;
+    $head = substr($name, 0, 1);
+    if (strspn($name, $allow_letter) != $letters ||
+        strspn($head, $sym) == 1) {
+        $err_msg = $msgarr['01016'][SCREEN_MSG];
+        $log_msg = $msgarr['01016'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* web.confのLocalPartRFCCheckが1の場合 */
+    if (isset($web_conf["postldapadmin"]["localpartrfccheck"]) === TRUE &&
+              $web_conf["postldapadmin"]["localpartrfccheck"] === "1") {
+        /* ローカルパートの形式チェック */
+        if (check_localpart($name) === FALSE) {
+            $err_msg = $msgarr['01016'][SCREEN_MSG];
+            $log_msg = $msgarr['01016'][LOG_MSG];
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_search_name()
+ *
+ * 検索ユーザ名チェック
+ *
+ * [引数]
+ *      $name        氏名
+ *      $maxlen      最大文字数
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_search_name($name)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 検索文字列の長さチェック */
+    if (strlen($name) > MAXMAIL) {
+        $err_msg = $msgarr['01017'][SCREEN_MSG];
+        $log_msg = $msgarr['01017'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 半角英小文字、数字、以下の記号のみ許可 */
+    $num = "0123456789";
+    $sl = "abcdefghijklmnopqrstuvwxyz";
+    $ll = strtoupper($sl);
+    $sym = "@!#$%&'*+-/=?^_{}~.";
+    $allow_letter = $num . $sl . $ll . $sym;
+    if (strspn($name, $allow_letter) != strlen($name)) {
+        $err_msg = $msgarr['01017'][SCREEN_MSG];
+        $log_msg = $msgarr['01017'][LOG_MSG];
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_mail()
+ *
+ * メールアドレス形式のチェック
+ *
+ * [引数]
+ *      $mail        メールアドレス
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_mail($mail)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+
+    /* メールアドレスの長さチェック */
+    if (strlen($mail) > MAXMAIL) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* @で二つに区切れるかのチェック */
+    $buf = explode('@', $mail, 2);
+    if (count($buf) != 2 || $buf[0] == "" || $buf[1] == "") {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* @より前のチェック */
+    /* 半角英小文字、数字、以下の記号のみ許可 */
+    $num = "0123456789";
+    $sl = "abcdefghijklmnopqrstuvwxyz";
+    $ll = strtoupper($sl);
+    $sym = "!#$%&'*+-/=?^_{}~.";
+    $allow_letter = $num . $sl . $ll . $sym;
+    if (strspn($buf[0], $allow_letter) != strlen($buf[0])) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* web.confのLocalPartRFCCheckが1の場合 */
+    if (isset($web_conf["postldapadmin"]["localpartrfccheck"]) === TRUE &&
+              $web_conf["postldapadmin"]["localpartrfccheck"] === "1") {
+        /* ローカルパートの形式チェック */
+        if (check_localpart($buf[0]) === FALSE) {
+            $err_msg = $msgarr['01018'][SCREEN_MSG];
+            $log_msg = $msgarr['01018'][LOG_MSG];
+            return FALSE;
+        }
+    }
+
+    /*  @より後ろのチェック */
+    if (strlen($buf[1]) < 3) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    $sym = "-_.";
+    $must = ".";
+    $must_not = "..";
+
+    /* ドットから始まればエラー */
+    if (substr($buf[1], 0, 1) == $must) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 1個以上のドットが必須。 */
+    if (strpos($buf[1], $must) === FALSE) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 2個以上のドットの連続は禁止。 */
+    if (strpos($buf[1], $must_not) !== FALSE) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    $allow_letter = $num . $sl . $ll . $sym;
+    $length = strlen($buf[1]);
+    if (strspn($buf[1], $allow_letter) != $length) {
+        $err_msg = $msgarr['01018'][SCREEN_MSG];
+        $log_msg = $msgarr['01018'][LOG_MSG];
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_mail_forward()
+ *
+ * メールアドレス形式のチェック
+ *
+ * [引数]
+ *      $mail        メールアドレス
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_mail_forward($mail)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+
+    /* メールアドレスの長さチェック */
+    if (strlen($mail) > FORWARD_LENGTH) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* @で二つに区切れるかのチェック */
+    $buf = explode('@', $mail, 2);
+    if (count($buf) != 2 || $buf[0] == "" || $buf[1] == "") {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* @より前のチェック */
+    /* 半角英小文字、数字、以下の記号のみ許可 */
+    $num = "0123456789";
+    $sl = "abcdefghijklmnopqrstuvwxyz";
+    $ll = strtoupper($sl);
+    $sym = "!#$%&'*+-/=?^_{}~.";
+    $allow_letter = $num . $sl . $ll . $sym;
+    if (strspn($buf[0], $allow_letter) != strlen($buf[0])) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* web.confのLocalPartRFCCheckが1の場合 */
+    if (isset($web_conf["postldapadmin"]["localpartrfccheck"]) === TRUE &&
+              $web_conf["postldapadmin"]["localpartrfccheck"] === "1") {
+        /* ローカルパートの形式チェック */
+        if (check_localpart($buf[0]) === FALSE) {
+            $err_msg = $msgarr['25004'][SCREEN_MSG];
+            $log_msg = $msgarr['25004'][LOG_MSG];
+            return FALSE;
+        }
+    }
+
+    /*  @より後ろのチェック */
+    if (strlen($buf[1]) < 3) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    $sym = "-_.";
+    $must = ".";
+    $must_not = "..";
+
+    /* ドットから始まればエラー */
+    if (substr($buf[1], 0, 1) == $must) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 1個以上のドットが必須。 */
+    if (strpos($buf[1], $must) === FALSE) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    /* 2個以上のドットの連続は禁止。 */
+    if (strpos($buf[1], $must_not) !== FALSE) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    $allow_letter = $num . $sl . $ll . $sym;
+    $length = strlen($buf[1]);
+    if (strspn($buf[1], $allow_letter) != $length) {
+        $err_msg = $msgarr['25004'][SCREEN_MSG];
+        $log_msg = $msgarr['25004'][LOG_MSG];
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * check_forward_length()
+ *
+ * メール転送設定画面の入力値チェック
+ * エラーメッセージは呼び出し元でセットする
+ *
+ * [引数]
+ *      $input_str   入力文字列
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_forward_length($input_str)
+{
+
+    /* メールアドレスの長さチェック */
+    if (strlen($input_str) > FORWARD_LENGTH) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * get_userdata()
+ *
+ * ユーザの情報を取得する
+ *
+ * [引数]
+ *        $userdn      ユーザDN
+ * [返り値]
+ *        TRUE         正常
+ *        $ret         異常
+ **********************************************************/
+function get_userdata ($userdn)
+{
+    global $ldapdata;
+
+    $filter = "objectClass=" . PLAOC;
+    $attrs = array();
+
+    /* エントリの取得 */
+    $ret = main_get_entry($userdn, $filter, $attrs, TYPE_ONEENTRY, $ldapdata);
+    if ($ret != LDAP_OK) {
+        return $ret;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * get_userdata_connect()
+ *
+ * ユーザの情報を取得する
+ *
+ * [引数]
+ *        $userdn      ユーザDN
+ *        $ds          LDAPリンクID
+ * [返り値]
+ *        TRUE         正常
+ *        FALSE        異常
+ **********************************************************/
+function get_userdata_connect($userdn, $ds)
+{
+    global $ldapdata;
+
+    $filter = "objectClass=" . PLAOC;
+    $attrs = array();
+
+    /* エントリの取得 */
+    $ret = main_get_entry_connect($userdn, $ds, $filter, $attrs, TYPE_ONEENTRY,
+                          $ldapdata);
+    if ($ret != LDAP_OK) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/*********************************************************
+ * check_duplicate()
+ *
+ * ユーザ名、メールエイリアス、メーリングリストアドレス内に
+ * 重複がないかチェックを行う
+ *
+ * [引数]
+ *        $mail  メールアドレス
+ * [返り値]
+ *        LDAP_FOUNDUSER    ユーザ名と重複
+ *        LDAP_FOUNDALIAS   エイリアスと重複し、自分自身のデータ
+ *        LDAP_FOUNDOTHER   その他重複
+ *        LDAP_NOUSER       重複なし
+ *        LDAP_ERRUSER      LDAPエラー
+ **********************************************************/
+function check_duplicate($mail)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    global $domain;
+    global $userdn;
+    global $url_data;
+
+    $ldapdata = array();
+    /* filter作成 */
+    $filter = "(|(mail=" . $mail . ")(mailAlias=" . $mail . "))";
+    $attrs = array();
+    $scope = TYPE_SUBTREE;
+    $dn = $web_conf[$url_data["script"]]["ldapbasedn"];
+
+    /* エントリ取得 */
+    $ret = main_get_entry($dn, $filter, $attrs, $scope, $ldapdata);
+    if ($ret == LDAP_OK) {
+        /* ユーザIDと重複しているか */
+        if ($mail == $ldapdata[0]['mail'][0] && $userdn == $ldapdata[0]['dn']) {
+            return LDAP_FOUNDUSER;
+        }
+        /* エイリアスと重複していて自分自身のデータ */
+        if (isset($ldapdata[0]['mailAlias'][0]) &&
+            $mail == $ldapdata[0]['mailAlias'][0] &&
+            $userdn == $ldapdata[0]['dn']) {
+            return LDAP_FOUNDALIAS;
+        }
+        /* その他の重複 */
+        return LDAP_FOUNDOTHER;
+    }
+
+    /* 重複なし */
+    if ($ret == LDAP_ERR_NODATA) {
+        return LDAP_NOUSER;
+    }
+
+    /* システムエラー */
+    return LDAP_ERRUSER;
+}
+
+/*********************************************************
+ * csv_check_duplicate()
+ *
+ * ユーザ名、メールエイリアス、メーリングリストアドレス内に
+ * 重複がないかチェックを行う(LDAP接続行わない）
+ *
+ * [引数]
+ *        $mail              メールアドレス
+ *        &$ds               LDAPリンクID
+ * [返り値]
+ *        LDAP_FOUNDUSER    ユーザ名と重複
+ *        LDAP_FOUNDALIAS   エイリアスと重複し、自分自身のデータ
+ *        LDAP_FOUNDOTHER   その他重複
+ *        LDAP_NOUSER       重複なし
+ *        LDAP_ERRUSER      LDAPエラー
+ **********************************************************/
+function csv_check_duplicate($mail, &$ds)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+    global $web_conf;
+    global $domain;
+    global $userdn;
+    global $url_data;
+
+    $ldapdata = array();
+    /* filter作成 */
+    $filter = "(|(mail=" . $mail . ")(mailAlias=" . $mail . "))";
+    $attrs = array();
+    $scope = TYPE_SUBTREE;
+    $dn = $web_conf[$url_data["script"]]["ldapbasedn"];
+
+    /* エントリ取得 */
+    $ret = main_get_entry_connect($dn, $ds, $filter, $attrs, $scope, $ldapdata);
+    if ($ret == LDAP_OK) {
+        /* ユーザIDと重複しているか */
+        if ($mail == $ldapdata[0]['mail'][0] && $userdn == $ldapdata[0]['dn']) {
+            return LDAP_FOUNDUSER;
+        }
+        /* エイリアスと重複していて自分自身のデータ */
+        if (isset($ldapdata[0]['mailAlias'][0]) &&
+            $mail == $ldapdata[0]['mailAlias'][0] &&
+            $userdn == $ldapdata[0]['dn']) {
+            return LDAP_FOUNDALIAS;
+        }
+        /* その他の重複 */
+        return LDAP_FOUNDOTHER;
+    }
+
+    /* 重複なし */
+    if ($ret == LDAP_ERR_NODATA) {
+        return LDAP_NOUSER;
+    }
+
+    /* システムエラー */
+    return LDAP_ERRUSER;
+}
+
+/***********************************************************
+ * user_sort()
+ *
+ * ユーザ検索結果ソートの比較関数
+ *
+ * [引数]
+ *        $elem_1      比較要素1
+ *        $elem_2      比較要素2
+ * [返り値]
+ *        0            等しい
+ *       -1            小さい
+ *        1            大きい
+ ************************************************************/
+function user_sort($elem_1, $elem_2)
+{
+    global $dispusr;
+
+    $cmp_1 = $elem_1[$dispusr][0];
+    $cmp_2 = $elem_2[$dispusr][0];
+
+    return strcmp($cmp_1, $cmp_2);
+}
+
+/***********************************************************
+ * ml_sort()
+ *
+ * メーリングリスト検索結果ソートの比較関数
+ *
+ * [引数]
+ *        $elem_1      比較要素1
+ *        $elem_2      比較要素2
+ * [返り値]
+ *        0            等しい
+ *       -1            小さい
+ *        1            大きい
+ ************************************************************/
+function ml_sort($elem_1, $elem_2)
+{
+    global $displayml;
+
+    $cmp_1 = $elem_1[$displayml][0];
+    $cmp_2 = $elem_2[$displayml][0];
+
+    return strcmp($cmp_1, $cmp_2);
+}
+
+/*********************************************************
+ * get_addr_list()
+ *
+ * ファイルからメールアドレスを読み込み、書式チェック
+ *
+ * [引数]
+ *           $file      ファイル名
+ *           $addrs     メールアドレスを格納する変数
+ * [返り値]
+ *           TRUE          正常
+ *           FALSE         異常
+ **********************************************************/
+function get_addr_list($file, &$addrs)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* 一括登録のファイル名未入力チェック */
+    if (empty($file)) {
+        $err_msg = $msgarr['01019'][SCREEN_MSG];
+        $log_msg = $msgarr['01019'][LOG_MSG];
+        return FALSE;
+    }
+
+    $file = file($file);
+    if ($file === FALSE) {
+        $err_msg = $msgarr['01019'][SCREEN_MSG];
+        $log_msg = $msgarr['01019'][LOG_MSG];
+        return FALSE;
+    }
+
+    if (($max = count($file)) == 0) {
+        $err_msg = $msgarr['01020'][SCREEN_MSG];
+        $log_msg = $msgarr['01020'][LOG_MSG];
+        return FALSE;
+    }
+
+    for ($i = 0, $err = 0, $line_num = 0, $addrs = array(), $logstr = "", $logstr_eng = "";
+         $i < $max; $i++) {
+
+        $line_num++;
+        $line = trim($file[$i]);
+
+        /*  アドレスの書式チェック */
+        if (check_mail($line) === FALSE) {
+            $err++;
+            $err_msg .= "($line_num 行目)<BR>" ;
+            $log_msg .= "(line $line_num)<BR>" ;
+            $logstr .= $err_msg;
+            $logstr_eng .= $log_msg;
+        } else {
+
+            /*  アドレスの重複チェック */
+            if (array_search($line, $addrs) !== FALSE) {
+                $err++;
+                $logstr .= sprintf($msgarr['01022'][SCREEN_MSG], $line_num);
+                $logstr_eng .= sprintf($msgarr['01022'][LOG_MSG], $line_num);
+            }
+        }
+        $addrs[] = $line;
+    }
+
+    /*  エラー */
+    if ($err != 0) {
+        $err_msg = preg_replace("/<BR>$/i", "", $logstr);
+        $log_msg = preg_replace("/<BR>$/i", "", $logstr_eng);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/*********************************************************
+ * set_admin_form_tag()
+ *
+ * ユーザ追加画面、編集画面のタグを作成、表示する
+ *
+ * [引数]
+ *           $mode         モード
+ *           $postdata     フォームから渡される連想配列
+ *           $hiddendata   hiddenで埋め込むデータ
+ *           $tag          タグ
+ * [返り値]
+ *           なし
+ **********************************************************/
+function set_admin_form_tag($mode, $postdata, $hiddendata, &$tag)
+{
+    global $dispusr;
+    global $web_conf;
+    global $url_data;
+
+    /* データの初期化 */
+    $uid = "";
+    $alias = "";
+    $trans = "";
+    $quota = "";
+    $save_check[0] = "";
+    $save_check[1] = "";
+
+
+    /* quotaの設定できる桁数を変数に代入する */
+    $quotasize = $web_conf[$url_data["script"]]["quotasize"];
+
+    /* 設定ファイルのクォータ単位を小文字に変換する */
+    $conf_quota = strtolower($web_conf[$url_data["script"]]["quotaunit"]);
+
+    /* 設定ファイルの内容によって、クォータの単位を変える */
+    switch ($conf_quota) {
+        case "b":
+            $quotaunit = "bytes";
+            break;
+        case "kb":
+            $quotaunit = "Kbytes";
+            break;
+        case "mb":
+            $quotaunit = "Mbytes";
+            break;
+        case "gb":
+            $quotaunit = "Gbytes";
+            break;
+    }
+
+    /* 表示するモード別の処理 */
+    if ($mode == ADD_MODE) {
+        $quota = escape_html($postdata['quota']);
+    } elseif ($mode == MOD_MODE) {
+        $uid = escape_html($postdata['uid']);
+        if (isset($postdata['quota'])) {
+            $quota = escape_html($postdata['quota']);
+        }
+        if (isset($postdata['trans'])) {
+            $trans = escape_html($postdata['trans']);
+            if ($postdata['save'] == ON) {
+                $save_check[0] = "checked";
+            } else {
+                $save_check[1] = "checked";
+            }
+        }
+        if (isset($postdata['alias'])) {
+            $alias = escape_html($postdata['alias']);
+        }
+    } elseif ($mode == POST_ADD_MODE || $mode == POST_MOD_MODE) {
+        /* POSTされたデータを変数に格納 */
+        $uid = escape_html($postdata["uid"]);
+        $quota = escape_html($postdata["quota"]);
+        $alias = escape_html($postdata["alias"]);
+        if (isset($postdata['trans'])) {
+            $trans = escape_html($postdata["trans"]);
+        }
+
+        if (isset($postdata["save"])) {
+            if ($postdata["save"] == ON) {
+                $save_check[0] = "checked";
+            } elseif ($postdata["save"] == OFF) {
+                $save_check[1] = "checked";
+            }
+        }
+    }
+
+    /* タグセット */
+    $tag["<<QUOTASIZE>>"] = $quotasize;
+    $tag["<<UID>>"] = $uid;
+    $tag["<<QUOTA>>"] = $quota;
+    $tag["<<QUOTAUNIT>>"] = $quotaunit;
+    $tag["<<ALIAS>>"] = $alias;
+    $tag["<<TRANS>>"] = $trans;
+    $tag["<<SAVEON>>"] = $save_check[0];
+    $tag["<<SAVEOFF>>"] = $save_check[1];
+    $tag["<<MAXPASSLEN>>"] = $web_conf["global"]["maxpasswordlength"];
+
+    $tag["<<HIDDEN>>"] = "";
+    foreach($hiddendata as $hidkey => $hidval) {
+        $hidval = escape_html($hidval);
+        $tag["<<HIDDEN>>"] .= "<input type=\"hidden\" name=\"{$hidkey}\" value=\"{$hidval}\">\n";
+    }
+}
+
+/*********************************************************
+ * set_ldapscope()
+ *
+ * 設定ファイルのldap検索スコープに応じて、
+ * サーチ用スコープをセットする。
+ *
+ * [引数]
+ *           $scope        文字列
+ * [返り値]
+ *           $ldapscope    サーチ用のスコープ
+ **********************************************************/
+function set_ldapscope($scope)
+{
+    $scope = strtolower($scope);
+    switch ($scope) {
+        case "base";
+            $ldapscope = TYPE_ONEENTRY;
+            break;
+        case "one";
+            $ldapscope = TYPE_ONELEVEL;
+            break;
+        case "sub";
+            $ldapscope = TYPE_SUBTREE;
+            break;
+    }
+    return $ldapscope;
+}
+
+/*********************************************************
+ * mk_filter()
+ *
+ * フィルタの作成
+ *
+ * [引数]
+ *        $name        ユーザ名
+ *        $name_match  一致条件 一致する: OFF 1
+ *                              含む    : ON  0
+ * [返り値]
+ *        $filter      フィルタ
+ **********************************************************/
+function mk_filter($name, $name_match = 1)
+{
+    global $web_conf;
+    global $domain;
+    global $url_data;
+
+    /* フィルタエスケープ */
+    $name_filter = filter_escape($name);
+
+    /* フィルタを読み込み */
+    $filter = $web_conf[$url_data["script"]]["ldapfilter"];
+
+    /* %sが指定されている場合 */
+    $ret = strpos($filter, '%s');
+    if ($ret !== FALSE) {
+        if ($name_filter != "") {
+            if ($name_match == ON) {
+                $filter = str_replace("%s", "*" . $name_filter . "*@" . $domain, $filter);
+            } else {
+                $filter = str_replace("%s", $name_filter . "@" . $domain, $filter);
+            }
+        } else {
+            $filter = str_replace("%s", "*", $filter);
+        }
+    } else {
+        /* %uを検索文字列に置換 */
+        if ($name_filter != "") {
+            if ($name_match == ON) {
+                $filter = str_replace("%u", "*" . $name_filter . "*", $filter);
+            } else {
+                $filter = str_replace("%u", $name_filter, $filter);
+            }
+        } else {
+            $filter = str_replace("%u", "*", $filter);
+        }
+        /* %dをドメインに置換 */
+        $filter = str_replace("%d", $domain, $filter);
+    }
+
+    $filter = "(&(objectClass=" . PLAOC . ")" . $filter . ")";
+
+    return $filter;
+}
+
+/*********************************************************
+ * mk_oc_list()
+ *
+ * オブジェクトクラスのリスト作成
+ *
+ * [引数]
+ *       $oc_str        文字列
+ * [返り値]
+ *       $oc_list       作成したリスト
+ **********************************************************/
+function mk_oc_list ($oc_str)
+{
+    $oc_list = rtrim($oc_str);
+    $oc_list = explode(",", $oc_list);
+
+    /* 無効な値を除去 */
+    $oc_list = array_values(array_filter($oc_list));
+
+    /* postLDAPadminのObjectClassを追加 */
+    array_push($oc_list, PLAOC);
+
+    return $oc_list;
+}
+/*********************************************************
+ * check_plugindata
+ *
+ * プラグイン用データチェック
+ *
+ * [引数]
+ *	$string		データ
+ * [返り値]
+ *	TRUE		正常
+ *	FALSE		異常
+ **********************************************************/
+function check_plugindata($string)
+{
+    global $msgarr;
+    global $err_msg;
+    global $log_msg;
+
+    /* プラグイン数取得 */
+    $data = explode(",", $string);
+    $count = count($data);
+
+    /* 各種データ取得 */
+    for ($i = 0; $i < $count; $i++) {
+        $plugin = explode(":", $data[$i]);
+        if (count($plugin) != 3) {
+                $err_col = $i + 1;
+                $err_msg = sprintf($msgarr['01021'][SCREEN_MSG], $err_col);
+                $log_msg = sprintf($msgarr['01021'][LOG_MSG], $err_col);
+                return FALSE;
+        }
+    }
+    return TRUE;
+
+}
+
+/*********************************************************
+ * set_plugindata
+ *
+ * プラグイン用データセット
+ *	 $plugindata	プラグイン用データ(連想配列)
+ *       		[*][name] 識別名
+ *	 		[*][filename] ファイル名
+ *	 		[*][image] 編集リンク用画像ファイル名
+ *
+ * [引数]
+ *	 なし
+ * [返り値]
+ *	 なし
+ **********************************************************/
+function set_plugindata()
+{
+    global $web_conf;
+    global $plugindata;
+
+    /* 初期化 */
+    $plugindata = array();
+
+    /* セットされている場合 */
+    if (isset($web_conf["postldapadmin"]["searchuserbutton"]) === TRUE &&
+              $web_conf["postldapadmin"]["searchuserbutton"] != "") {
+        /* プラグイン数取得 */
+        $data = explode(",", $web_conf["postldapadmin"]["searchuserbutton"]);
+        $count = count($data);
+
+        /* 各種データ取得 */
+        for ($i = 0; $i < $count; $i++) {
+            $plugin = explode(":", $data[$i], 3);
+
+            /* 格納 */
+            $plugindata[$i]["name"] = $plugin[0];
+            $plugindata[$i]["file"] = $plugin[1];
+            $plugindata[$i]["image"] = $plugin[2];
+        }
+    }
+    return;
+
+}
+
+/***************************************************************************
+ * del_user_ldapdata
+ *
+ * 再帰的にLDAPエントリーの削除を行う
+ *
+ * [引数]
+ *  $del_dn         削除dnデータ
+ * [返り値]
+ *  LDAP_OK         正常
+ *  LDAP_ERR_BIND   バインドエラー
+ *  LDAP_ERR_SEARCH サーチエラー
+ *  LDAP_ERR_PARAM  不正な引数入力
+ *  LDAP_ERR_NODATA エントリが存在しない
+ *  LDAP_ERR_OTHER  その他のエラー
+ *  LDAP_ERR_DEL    LDAPのエントリの削除に失敗
+ **************************************************************************/
+function del_user_ldapdata($del_dn)
+{
+    /* エントリーの検索 */
+    $ret = main_get_entry($del_dn, DEL_FILTER, array(), TYPE_ONELEVEL, $ldap_result);
+
+    /* 下位のエントリー削除 */
+    if ($ret === LDAP_OK) {
+
+        /* 再帰的にエントリーを削除 */
+        for ($i = 0; isset($ldap_result[$i]['dn']); $i++) {
+            $entry_ret = del_user_ldapdata($ldap_result[$i]['dn']);
+            if ($entry_ret !== LDAP_OK) {
+                return $entry_ret;
+            }
+        }
+    }
+
+    /* 指定エントリー削除 */
+    if ($ret === LDAP_ERR_NODATA || $ret === LDAP_OK) {
+
+        $del_ret = LDAP_del_entry($del_dn);
+        if ($del_ret !== LDAP_OK) {
+            return $del_ret;
+        }
+    } else {
+        return $ret;
+    }
+
+    return LDAP_OK;
+}
+
+/*********************************************************
+ * make_passwd()
+ *
+ * パスワードの暗号化を作成
+ *
+ * [引数]
+ *       $pass            パスワード
+ * [返り値]
+ *       TRUE            正常
+ *       FALSE           異常
+ **********************************************************/
+function make_passwd($pass)
+{
+    global $web_conf;
+    global $err_msg;
+    global $log_msg;
+    global $pass_enc;
+
+    /*暗号化のname存在することチェック*/
+    if (isset($pass_enc[$web_conf["global"]["passwordencrypt"]]["name"]) === FALSE) {
+        $err_msg = "パスワードエンコード設定が不正です。(" . $web_conf["global"]["passwordencrypt"] . ")";
+        $log_msg = "Invalid Password Encrypt.(" . $web_conf["global"]["passwordencrypt"] . ")";
+        return FALSE;
+    }
+    /*暗号化のschema存在することチェック*/
+    if (isset($pass_enc[$web_conf["global"]["passwordencrypt"]]["schema"]) === FALSE) {
+        $err_msg = "パスワードエンコード設定が不正です。(" . $web_conf["global"]["passwordencrypt"] . ")";
+        $log_msg = "Invalid Password Encrypt.(" . $web_conf["global"]["passwordencrypt"] . ")";
+        return FALSE;
+    }
+    /*暗号化のmake_func存在することチェック*/
+    if (isset($pass_enc[$web_conf["global"]["passwordencrypt"]]["make_func"]) === FALSE) {
+        $err_msg = "パスワードエンコード設定が不正です。(" . $web_conf["global"]["passwordencrypt"] . ")";
+        $log_msg = "Invalid Password Encrypt.(" . $web_conf["global"]["passwordencrypt"] . ")";
+        return FALSE;
+    }
+
+    /*正常処理*/
+    return $pass_enc[$web_conf["global"]["passwordencrypt"]]["schema"] . 
+           $pass_enc[$web_conf["global"]["passwordencrypt"]]["make_func"]($pass);
+}
+
+/*********************************************************
+ * check_localpart()
+ *
+ * メールアドレスのローカルパートチェック
+ *
+ * [引数]
+ *      $local       メールアドレス
+ * [返り値]
+ *      TRUE         正常
+ *      FALSE        異常
+ **********************************************************/
+function check_localpart($local)
+{
+    /* 拒否文字定義 */
+    $dot_atom = ".";
+    $dot_continuous = "..";
+
+    /* 先頭に.がある場合は形式エラー */
+    if (substr($local, 0, 1) === $dot_atom) {
+        return FALSE;
+    }
+
+    /* 末尾に.がある場合は形式エラー */
+    if (substr($local, -1, 1) === $dot_atom) {
+        return FALSE;
+    }
+
+    /* .が連続する場合は形式エラー */
+    if (strpos($local, $dot_continuous)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+?>
