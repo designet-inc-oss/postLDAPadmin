@@ -1,0 +1,9 @@
+dn: cn=schema
+attributeTypes: ( 1.3.6.1.4.1.15774.1.10.1.2.1 NAME 'quotaSize' DESC 'quota size' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40{32} SINGLE-VALUE )
+attributeTypes: ( 1.3.6.1.4.1.15774.1.10.1.2.2 NAME 'mailAlias' DESC 'mail alias' EQUALITY caseIgnoreIA5Match SUBSTR caseIgnoreIA5SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26{256} )
+attributeTypes: ( 1.3.6.1.4.1.15774.1.10.1.2.3 NAME 'mailDirectory' DESC 'mail directory' EQUALITY caseIgnoreIA5Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.26{256} SINGLE-VALUE )
+attributeTypes: ( 1.3.6.1.4.1.15774.1.10.1.2.4 NAME 'mailForwardingAddr' DESC 'mail forwarding address' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40{256} )
+attributeTypes: ( 1.3.6.1.4.1.15774.1.1.3.1.1 NAME 'mailFilterOrder' DESC 'mail filter order' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40{128} )
+attributeTypes: ( 1.3.6.1.4.1.15774.1.1.3.1.2 NAME 'mailFilterArticle' DESC 'mail filter article' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.40{1024} )
+objectClasses: ( 1.3.6.1.4.1.15774.1.10.1.1.1 NAME 'postLdapAdmin' DESC 'postLdapAdmin user' SUP top AUXILIARY MUST ( uid $ mail ) MAY ( userPassword $ quotaSize $ mailAlias $ mailDirectory $ mailForwardingAddr $ mailFilterOrder $ mailFilterArticle ) )
+
