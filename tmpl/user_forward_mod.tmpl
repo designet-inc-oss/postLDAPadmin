@@ -4,212 +4,166 @@
   <title><<TITLE>></title>
   <<JAVASCRIPT>>
   <meta charset="EUC-JP">
-  <link rel="stylesheet" href="../../../css/bootstrap/css/bootstrap-paper.css">
-  <script src="../../../js/jquery-3.1.1.min.js"></script>
-  <script src="../../../js/jquery-ui.min.js"></script>
-  <script src="../../../css/bootstrap/js/bootstrap.min.js"></script>
   <link rel="stylesheet" href="../../../css/style.css">
 </head>
 
 <body>
-<header class="">
-  <nav class="navbar navbar-default navmargin">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#gmenu">
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <div class="navbar-brand"></div>
-    </div>
-
-
-    <div id="gmenu" class="collapse navbar-collapse">
-      <ul class="nav navbar-nav navbar-right ">
-<<START_TAB>>
-<li class="<<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')"><span class="glyphicon glyphicon-user" aria-hidden="true"></span><<NAME>></a></li>
-<<END_TAB>>
-<li class=""><a href="#" onClick="dgpSubmit('../../logout.php')"><span class="glyphicon glyphicon-user" aria-hidden="true"></span>ログアウト</a></li>
+<!-- ヘッダー  -->
+<header>
+  <!-- メニューリンク  -->
+  <nav class="header-nav">
+    <div id="gmenu" class="navbar">
+      <!-- ロゴ画像  -->
+      <div class="logo-image"></div>
+      <ul class="navbar-nav">
+        <<START_TAB>>
+        <li class="nav-item <<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')" class="nav-link"><<NAME>></a></li>
+        <<END_TAB>>
+        <li class="nav-item"><a href="#" onClick="dgpSubmit('../../logout.php')" class="nav-link">ログアウト</a></li>
       </ul>
     </div>
   </nav>
-  <div class="container-fluid fix-padding">
-  </div>
+
+  <nav class="navbar-hum">
+    <input type="checkbox" id="menu-toggle" class="navbar-hum-toggle">
+    <div class="navbar-hum-image">
+      <!-- ロゴ画像  -->
+      <div class="logo-image"></div>
+      <label for="menu-toggle" class="navbar-hum-icon">
+        <span class="navbar-hum-bar"></span>
+        <span class="navbar-hum-bar"></span>
+        <span class="navbar-hum-bar"></span>
+      </label>
+    </div>
+    <div class="nabvar-hum-menu">
+      <ul>
+        <<START_TAB>>
+        <li class="nav-item <<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')" class="nav-link"><span class="nav-icon"></span><<NAME>></a></li>
+        <<END_TAB>>
+        <li class="nav-item"><a href="#" onClick="dgpSubmit('../../logout.php')" class="nav-link"><span class="nav-icon"></span>ログアウト</a></li>
+      </ul>
+    </div>
+  </nav>
 </header>
 
-<div class="container-fluid">
-  <!-- 左グリッド  -->
-  <div class="row">
-    <!-- 左ナビゲーションバー -->
-    <nav class="aside col-sm-2 col-sm-offset-1">
-      <div class="panel panel-default">
-        <ul class="list-group">
-<<START_MENU>>
-<a class="list-group-item  <<ACTIVE>>" href="#"	onClick="dgpSubmit('<<URL>>')"><<NAME>></a>
-<<END_MENU>>
-        </ul>
-      </div>
-    </nav>
-
-    <!--ass="table">右グリッド  -->
-    <div class="col-sm-8">
-      <!-- エラーメッセージ -->
-
-      <!-- メインコンテンツ -->
-      <div class="panel panel-primary">
-        <div class="panel-heading">
-          <h3 class="panel-title">転送設定</h3>
-        </div>
-        <div class="ErrorMessage"></div>
-        <div class="row panel-body">
-
+<div class="main">
+  <!-- メインコンテンツ  -->
+  <main class="contents">
+    <div class="contents-title">
+      <span>転送設定</span>
+    </div>
+    <form method="POST" id="filter_fields">
+      <div class="ErrorMessage"><<MESSAGE>></div>
       <!-- メールフィルタ機能開始 -->
       <div id="main" class="main">
-
-          <!-- フォーム -->
-          <div class="col-sm-10 col-sm-offset-1">
-            <form class="form-horizontal" method="POST" id="filter_fields">
-          <div class="form-group well">
-
-<<MESSAGE>>
-
-            <table id="filter_fields" class="filter_tables table">
-                <tr><th colspan="1">条件</th><th>削除</th></tr>
-                <!-- 各ルール開始 -->
-
+      <div class="form-container">
+        <div class="forward-title">
+          <span>条件</span>
+          <span>削除</span>
+        </div>
+        <!-- 各ルール開始 -->
 <<LOOP_START>>
-                <tr>
-
-                <!-- ID:<<FILTER_ID>>チェックボックス -->
-                <td class="filter_check_boxes filter_input_cell">
-                    <input type="hidden" name="id[<<FILTER_ID>>]" value="<<FILTER_ID>>">
-
-                    <!-- forward_conf -->
-                    <input type="radio" name="transfer_rule<<FILTER_ID>>" value="0" <<ALL_FORWARD>>>
-                    <span>全て転送</span><br>
-                    <input type="radio" name="transfer_rule<<FILTER_ID>>" value="1" <<DETAIL_FORWARD>>>
-                    <span>詳細設定</span><br>
-
-                    <!-- sender -->
-                    &emsp;<input type="checkbox" name="sender_enable<<FILTER_ID>>" <<FORWARD_CHECK>>>
-                    <span>送信者</span>
-                    <!-- sender -->
-                <div class="form-group">
-                  <div class="col-sm-6">
-                    <input type="text" class="form-control" name="sender<<FILTER_ID>>" value="<<FORWARD_TEXT>>" maxlength="128">
-                  </div>
-                  <div class="col-sm-2">
-                    <select class="forward_selectbox" name="sender_option<<FILTER_ID>>">
-                      <option value='0' <<FORWARD_MATCH>>>と一致する</option>
-                      <option value='1' <<FORWARD_INCLUDE>>>を含む</option>
-                      <option value='2' <<FORWARD_NOT_INC>>>を含まない</option>
-                      <option value='3' <<FORWARD_EMPTY>>>が空である</option>
-                    </select><br>
-                  </div>
-                </div>
-
-                    <!-- subject -->
-                    &emsp;<input type="checkbox" name="subject_enable<<FILTER_ID>>" <<SUBJECT_CHECK>>>
-                    <span>件名</span>
-                    <!-- subject -->
-                <div class="form-group">
-                  <div class="col-sm-6">
-                    <input type="text" class="form-control" name="subject<<FILTER_ID>>" value="<<SUBJECT_TEXT>>" maxlength="128">
-                  </div>
-                  <div class="col-sm-2">
-                    <select class="forward_selectbox" name="subject_option<<FILTER_ID>>">
-                      <option value='0' <<SUBJECT_MATCH>>>と一致する</option>
-                      <option value='1' <<SUBJECT_INCLUDE>>>を含む</option>
-                      <option value='2' <<SUBJECT_NOT_INC>>>を含まない</option>
-                      <option value='3' <<SUBJECT_EMPTY>>>が空である</option>
-                    </select><br>
-                  </div>
-                </div>
-
-                    <!-- recipient -->
-                    &emsp;<input type="checkbox" name="recipient_enable<<FILTER_ID>>" <<RECIPT_CHECK>>>
-                    <span>宛先(Cc,To)</span>
-                    <!-- recipient -->
-                <div class="form-group">
-                  <div class="col-sm-6">
-                    <input type="text" class="form-control" name="recipient<<FILTER_ID>>" value="<<RECIPT_TEXT>>" maxlength="128">
-                  </div>
-                  <div class="col-sm-2">
-                    <select class="forward_selectbox" name="recipient_option<<FILTER_ID>>">
-                      <option value='0' <<RECIPT_MATCH>>>と一致する</option>
-                      <option value='1' <<RECIPT_INCLUDE>>>を含む</option>
-                      <option value='2' <<RECIPT_NOT_INC>>>を含まない</option>
-                      <option value='3' <<RECIPT_EMPTY>>>が空である</option>
-                    </select><br>
-                  </div>
-                </div>
-
-                    <!-- forward -->
-                    <br>
-                    <span>&nbsp;&nbsp;転送先</span>
-                <div class="form-group">
-                  <div class="col-sm-6">
-                    <input type="text" class="form-control" name="forward_address<<FILTER_ID>>" value="<<TRANSFER_ADDR>>" maxlength="128">
-                  </div>
-                    <!-- restore -->
-                    <span>サーバにメールを</span>
-                  <div class="col-sum-2">
-                    <select name="save<<FILTER_ID>>">
-                      <option value='0' <<MAIL_LEAVE>>>残す</option>
-                      <option value='1' <<MAIL_DEL>>>残さない</option>
-                    </select><br>
-                  </div>
-                </div>
-                    <br><!-- 表示用 -->
-                </td>
-                <!-- delete -->
-                <td class="filter_actions delete_button_holder">
-                    <button  class="delete_button" onclick="confirmDelete('delete', '<<FILTER_ID>>')">
-                        <img src="../../images/mailfilter_trash_can.jpg" alt="削除">
-                    </button>
-                </td>
-                </tr>
-                <!-- 各ルール終了 -->
-
-<<LOOP_END>>
-
-            </table>
+        <div class="form-group">
+          <div class="forward-label form-radio">
+            <input type="hidden" name="id[<<FILTER_ID>>]" value="<<FILTER_ID>>">
+            <label>
+              <input type="radio" name="transfer_rule<<FILTER_ID>>" value="0" <<ALL_FORWARD>>>
+              <span>全て転送</span>
+              <!-- delete -->
+              <button class="forward-delete-button" onclick="confirmDelete('delete', '<<FILTER_ID>>')">
+                <img src="../../images/mailfilter_trash_can.jpg" alt="削除">
+              </button>
+            </label>
+            <label>
+              <input type="radio" name="transfer_rule<<FILTER_ID>>" value="1" <<DETAIL_FORWARD>>>
+              <span>詳細設定</span>
+            </label>
+            <!-- sender -->
+            <label>
+            &emsp;<input type="checkbox" name="sender_enable<<FILTER_ID>>" <<FORWARD_CHECK>>>
+            <span>送信者</span>
+            </label>
+            <label>
+              <input type="text" class="form-text" name="sender<<FILTER_ID>>" value="<<FORWARD_TEXT>>" maxlength="128">
+              <select name="sender_option<<FILTER_ID>>">
+                <option value='0' <<FORWARD_MATCH>>>と一致する</option>
+                <option value='1' <<FORWARD_INCLUDE>>>を含む</option>
+                <option value='2' <<FORWARD_NOT_INC>>>を含まない</option>
+                <option value='3' <<FORWARD_EMPTY>>>が空である</option>
+              </select>
+            </label>
             <br>
-            <img class="bmessage" src="../../images/spacer.gif">
-            <img class="bmessage" src="../../images/spacer.gif">
-            <button type="submit" name="modify" value="" class="btn btn-primary">更新</button>
-            <input id="filterId" type="hidden" name="filterId" value="">
-            <input id="buttonName" type="hidden" name="buttonName" value="">
-            <<SK>>
+            <!-- subject -->
+            <label>
+              &emsp;<input type="checkbox" name="subject_enable<<FILTER_ID>>" <<SUBJECT_CHECK>>>
+              <span>件名</span>
+            </label>
+            <label>
+              <input type="text" class="form-text" name="subject<<FILTER_ID>>" value="<<SUBJECT_TEXT>>" maxlength="128">
+            <select name="subject_option<<FILTER_ID>>">
+                <option value='0' <<FORWARD_MATCH>>>と一致する</option>
+                <option value='1' <<FORWARD_INCLUDE>>>を含む</option>
+                <option value='2' <<FORWARD_NOT_INC>>>を含まない</option>
+                <option value='3' <<FORWARD_EMPTY>>>が空である</option>
+              </select>
+            </label>
+            <br>
+            <!-- recipient -->
+            <label>
+              &emsp;<input type="checkbox" name="recipient_enable<<FILTER_ID>>" <<RECIPT_CHECK>>>
+              <span>宛先(Cc,To)</span>
+            </label>
+            <label>
+              <input type="text" class="form-text" name="recipient<<FILTER_ID>>" value="<<RECIPT_TEXT>>" maxlength="128">
+              <select name="recipient_option<<FILTER_ID>>">
+                <option value='0' <<FORWARD_MATCH>>>と一致する</option>
+                <option value='1' <<FORWARD_INCLUDE>>>を含む</option>
+                <option value='2' <<FORWARD_NOT_INC>>>を含まない</option>
+                <option value='3' <<FORWARD_EMPTY>>>が空である</option>
+              </select>
+            </label>
+            <br>
+          </div>    
         </div>
-        </form>
-        <!-- フィルタフォーム終了 -->
-
-
-        <!-- start updateFiltersForm form -->
-        <form id="updateFiltersForm" method="post">
-            <<SK>>
-            <input id="buttonName" type="hidden" name="buttonName" value="">
-        </form>
-        <!-- end updateFiltersForm form -->
-
-      <br><br>
-      
-        </div>
-      <!-- メールフィルタ機能終了 -->
-
-              <!-- ボタン -->
-          
-            </div>
+        <div class="form-group">
+          <div class="forward-label form-radio">
+            <label>&emsp;転送先</label>
+            <label class="horizontal-item">
+              <input type="text" class="form-text" name="forward_address<<FILTER_ID>>" value="<<TRANSFER_ADDR>>" maxlength="128">
+              <div class="vertical-item">
+                <span>サーバにメールを</span>
+                <select name="save<<FILTER_ID>>">
+                  <option value='0' <<MAIL_LEAVE>>>残す</option>
+                  <option value='1' <<MAIL_DEL>>>残さない</option>
+                </select>
+              </div>
+            </label>
           </div>
         </div>
+        <!-- 各ルール終了 -->
+<<LOOP_END>>
+        <!-- ボタン -->
+        <div class="form-button">
+          <button type="submit" name="modify" value="">更新</button>
+          <input id="filterId" type="hidden" name="filterId" value="">
+          <input id="buttonName" type="hidden" name="buttonName" value="">
+          <<SK>>
+        </div>
       </div>
-    </div>
+    </form>
+    <!-- start updateFiltersForm form -->
+    <form id="updateFiltersForm" method="post">
+      <<SK>>
+      <input id="buttonName" type="hidden" name="buttonName" value="">
+    </form>
+    <!-- end updateFiltersForm form -->
+  </main>
+</div>
+
+<footer>
+  <div class="logo-footer">
+    <div class="logo-image"></div>
   </div>
-<footer class="footer nav navbar-default">
-    <nav class="pull-right">
-      <div class="navbar-brand"></div>
-    </nav>
 </footer>
 
 <form method="post" name="common">

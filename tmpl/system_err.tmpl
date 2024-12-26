@@ -4,36 +4,24 @@
   <title><<TITLE>></title>
   <<JAVASCRIPT>>
   <meta charset="EUC-JP">
-  <link rel="stylesheet" href="../<<TOPDIR>>css/bootstrap/css/bootstrap-paper.css">
-  <script src="../<<TOPDIR>>js/jquery-3.1.1.min.js"></script>
-  <script src="../<<TOPDIR>>js/jquery-ui.min.js"></script>
-  <script src="../<<TOPDIR>>css/bootstrap/js/bootstrap.min.js"></script>
   <link rel="stylesheet" href="../<<TOPDIR>>css/style.css">
 </head>
 
 <body>
-<header class="">
-  <nav class="navbar navbar-default navmargin">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#gmenu">
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <div class="navbar-brand"></div>
-    </div>
-  </nav>
-  <div class="container-fluid fix-padding">
+<!-- ヘッダー  -->
+<header>
+  <!-- ロゴ画像  -->
+  <div class="logo-header">
+    <div class="logo-image"></div>
   </div>
 </header>
 
-<div class="container-fluid">
-<<MESSAGE>>
-</div>
-<footer class="footer nav navbar-default">
-    <nav class="pull-right">
-      <div class="navbar-brand"></div>
-    </nav>
+<div class="InfoMessage"><<MESSAGE>></div>
+
+<footer>
+  <div class="logo-footer">
+    <div class="logo-image"></div>
+  </div>
 </footer>
 
 <form method="post" name="common">
@@ -41,5 +29,4 @@
 </form>
 
 </body>
-
 </html>

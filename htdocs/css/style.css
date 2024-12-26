@@ -1,110 +1,850 @@
-@import url("override.css");  
-header, body, div {
+/* bodyのベーススタイル */
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    /* 文字のベーススタイル */
+    color: #696969;
+    font-size: 14px;
+    font-family: sans-serif;
 }
 
-.fix-padding { padding-top: 10px;  }
-
-.navbar-brand {
-  background: url("../admin/images/logo.png") no-repeat left center;
-  background-size: contain;
-  height: 40px;
-  width: 335px;
-  margin-top:10px;
-}
-
-.navmargin {
-  margin-bottom: 5px;
-}
-
-.input-group-addon {
-  width: 230px;
-  text-align: left;
-}
-
-.input-group {
-  width: 100%;
-}
-
-input.list_mod_btn  {
-  table-layout: fixed;
-  width:  20px;
-  height: 20px;
-  border-collapse:  collapse;
-  border-style: none;
-  margin: 0px;
-  padding:  0px;
-  background: url(../admin/images/list_mod.png);
-}
-
-.breadcrumb > li + li:before {
-  content: ">";
-}
-
-
-.thead-default-extend {
-  background-color: #ddd; 
-}
-
-.no-border-radius {
-  border-radius: 0px !important;
-  border-bottom: 1px solid #ccc;
-}
-
-.Pagenator {
-  text-align: center;
-}
-
-.ErrorMessage {
-  text-align: center;
-  color: red;
-}
-
-
-@media (max-width: 767px) {
-  .responsive {
-    border-collapse: separate;
-    border-spacing: 0  20px;
-  }
-  .responsive thead {
-    display: none;
-  }
-  .responsive tr {
-  }
-  .responsive td {
-    border: none;
-    display: block;
+/* ヘッダー全体のベーススタイル */
+header {
+    background-color: #fff;
+    color: #333;
+    padding: 0px;
+    margin-bottom: 5px;
     width: 100%;
-    box-sizing: border-box;
-    border-bottom: 1px solid #dddddd;
-  }
-  .responsive td.col-6 {
-    float: left;
-    width: 50%;
-  }
-  .responsive td.txt-right {
+    display: flex;
+    flex-direction: column;
+    border-bottom:1px solid #DDD;
+}
+
+/* ボタンの基本プロパティ */
+button {
+    display: inline-block;
+    min-width: 80px;
+    margin: 5px;
+    padding: 5px;
+    background-color: #2196f3;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: sans-serif;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+/* ボタンにカーソルを合わせたとき */
+button:hover {
+    background-color: #0056b3;
+}
+
+/* テーブルの基本プロパティ */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: auto;
+}
+
+table tr {
+    border-bottom: 1px solid #dcdcdc;
+}
+
+/* 要素を縦並びにするためのスタイル */
+.vertical-item {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 要素を横並びにするためのスタイル */
+.horizontal-item {
+    display: flex;
+    flex-direction: row;
+}
+
+/* 文字サイズを大きくするためのスタイル */
+.large-font {
+    font-size: 16px;
+}
+
+/* ナビゲーションバーのスタイル */
+.navbar-container {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.header-nav {
+    width: 100%;
+    height: 60px;
+}
+
+.navbar {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.navbar .logo-image {
+    margin-top: 10px;
+}
+
+.navbar-nav {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+}
+
+.nav-item {
+    white-space: nowrap;
+    margin-left: 1px;
+}
+
+.nav-link {
+    width: auto;
+    height: 100%;
+    color: #333;
+    font-size:13px;
+    text-decoration: none;
+    padding: 5px 10px 5px 10px;
+    transition: background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+}
+
+.nav-link:hover {
+    background-color: #eee;
+}
+
+.nav-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
+}
+
+/* アクティブなメニュー項目のスタイル */
+.nav-item.active .nav-link {
+    background-color: #CCFF99;
+    color: #212121;
+}
+
+/* 左サイドメニュー */
+.left-nav {
+    width: 20%;
+    margin-bottom: 5px;
+}
+
+.left-menu {
+    width: 100%;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.left-menu-item {
+    width: 100%;
+    height: 50px;
+    border: 1px solid #DDD;
+    display: flex;
+    align-items: center;
+}
+
+.left-menu-item > a {
+    width: 100%;
+    height: 50px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.left-menu-item.active .nav-link {
+    background-color: #2196f3;
+    color: #ffffff;
+}
+
+/* フッター */
+footer {
+    background-color: #fff;
+    color: #333;
+    padding: 0px;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    height: auto;
+}
+
+.logo-footer {
+    margin: 10px 0px 10px 0px;
+}
+
+/* ロゴのサイズ */
+.logo-image {
+    background: url("../admin/images/logo.png") no-repeat left center;
+    background-size: contain;
+    height: 40px;
+    width: 335px;
+}
+
+/* ヘッダーの下のメニューとメインコンテンツを入れる箱 */
+.main {
+    display: flex;
+    justify-content: center;
+    align-items: start;
+    width: 90%;
+    height: auto;
+    margin: 0 5% 0 5%;
+    padding: 0 10px 0 10px;
+    padding 0;
+    overflow: hidden;
+}
+
+/* エラーメッセージ */
+.ErrorMessage {
+    text-align: center;
+    color: red;
+    font-weight: bold;
+    margin-top: 5px;
+    overflow-wrap: break-word;
+}
+
+/* 正常系メッセージ */
+.InfoMessage {
+    width: 70%;
+    margin: 5px 0 0 20px;
+    padding: 0;
+    color: #696969;
+    font-family: sans-serif;
+}
+
+/* ログイン画面 */
+.auth-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.auth-form {
+/* 配置の調整 */
+    padding: 0 0 30px 0;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    width: 60%;
+    height: 30%;
+    text-align: center;
+    border-radius: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.auth-title {
+    height: 20px;
+    background-color: #2196f3;
+    padding: 10px;
+    margin: 0;
+    color: #fff;
+    text-align: left;
+    font-size: 14px;
+    font-family: sans-serif;
+}
+
+.auth-content {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    flex-direction: column;
+}
+
+.auth-content button {
+    width: 60px;
+    padding: 5px;
+    margin: 5px;
+    position: relative;
+    left: 10%; 
+}
+
+.auth-group {
+    margin-left: 10%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    width: 80%;
+    height: 70%;
+    background-color: #f5f5f5;
+}
+
+.auth-input {
+    display: flex;
+    width: 80%;
+    padding: 0;
+    margin: 30px 0 10px 100px;
+    text-align: left;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.auth-input > label {
+    font-size: 14px;
+    font-family: sans-serif;
+    width: 200px;
+    margin-right: 10px;
+    color: #696969;
     text-align: right;
-  }
-  .responsive td:before {
-    content: attr(data-title) ":";
-  }
-  .responsive .clear {
-    clear: both;
-  }
 }
 
-.navbar-default .navbar-nav>.active>a,
-.navbar-default .navbar-nav>.active>a:focus,
-.navbar-default .navbar-nav>.active>a:hover {
-background-color: #CCFF99;
+.auth-input > input {
+    margin: 0;
+    width: 100%;
+    height: 20px;
+
+    /* テキストボックスを下線だけにする */
+    border: none;
+    border-bottom: 1px solid #dcdcdc;
+    font-size: 14px;
+    background-color: #f5f5f5;
 }
 
-input.plugin_btn {
+.auth-input > input:focus {
+    outline: none;
+    border-bottom: 2px solid #2196f3;
+    font-size: 14px;
+    background-color: #f5f5f5;
+}
+
+/* メインコンテンツ */
+.contents {
+    display: flex;
+    width: 70%;
+    justify-content: start;
+    align-items: start;
+    flex-direction: column;
+    margin: 0 0 10px 20px;
+    padding: 0;
+    border-radius: 2px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* メインコンテンツの入力フォーム */
+.contents > form {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* メインコンテンツのタイトル */
+.contents-title {
+    display: flex;
+    justify-content: start;
+    align-items: center;
+    width: 100%;
+    height: 50px;
+    margin: 0;
+    padding: 0;
+    background-color: #2196f3;
+}
+
+/* メインコンテンツのタイトルのテキスト */
+.contents-title > span {
+    width: 100%;
+    margin: 0;
+    padding: 0 0 0 20px;
+    font-size: 16px;
+    font-family: sans-serif;
+    color: #ffffff;
+}
+
+/* 入力フォームの大枠 */
+.form-container {
+    display: flex;
+    width: 90%;
+    justify-content: center;
+    align-items: flex-end;
+    flex-direction: column; 
+    background-color: #f5f5f5; 
+    margin: 5px 0 5px 4%;
+    padding: 40px 10px 20px 10px;
+}
+
+/* 入力フォームの内枠 */
+.form-group {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 10px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+/* 入力フォームの項目名 */
+.form-label {
+    width: 30%;
+    height: auto;
+    padding-top: 2px;
+    padding-right: 10px; 
+    text-align: right;
+}
+
+/* 入力フォームの基本プロパティ */
+.form-input {
+    width: 70%;
+    height: 30px;
+}
+
+/* 入力フォームのテキストボックス */
+.form-text {
+    /* テキストボックスを下線だけにする */
+    border: none;
+    border-bottom: 1px solid #dcdcdc;
+    font-size: 16px;
+    background-color: #f5f5f5;
+}
+
+/* 入力フォームのテキストボックスをクリックした場合 */
+.form-text:focus {
+    outline: none;
+    border-bottom: 2px solid #2196f3;
+    font-size: 16px;
+    background-color: #f5f5f5;
+}
+
+/* CSV追加画面のファイル選択/チェックボタン */
+.file-check-button {
+    width: 40%;
+    margin: 0 30% 0 0;
+    font-size: 12px;
+    background-color: #F0F0F0;
+    color: initial;
+    border: 1px solid;
+    border-color: initial;
+    text-align: center;
+    border-radius: 2px;
+}
+
+.file-check-button:hover {
+    background-color: #E5E5E5;
+}
+
+/* 入力フォームのラジオボタン */
+.form-radio {
+    width: 70%;
+    height: 100%;
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    display: flex;
+    justify-content: start;
+    align-items: start;
+    flex-direction: column;
+}
+
+/* 入力フォームのセレクトボックス */
+.form-select {
+    height: 30px;
+    margin: 5px;
+}
+
+/* 入力フォームのボタン */
+/* form-groupの外側にある */
+.form-button {
+    display: flex;
+    width: 100%;
+    justify-content: start;
+    align-items: center;
+}
+
+/* 入力フォームのテーブル */
+.form-table {
+    width: 100%;
+    display: flex;
+    justify-content: start;
+    align-items: center;
+    flex-direction: column;
+}
+
+/* 入力フォームのテーブルに埋め込んだURLのプロパティ */
+.form-table a {
+    font-size: 14px;
+    font-family: sans-serif;
+    color: #2196f3;
+    text-decoration: none;
+}
+
+
+/* テーブルのセル */
+.table-col {
+    max-width: 160px;
+    padding: 8px;
+    vertical-align: top;
+    font-size: 14px;
+    font-family: sans-serif;
+    color: #696969;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* テーブルのタイトル */
+.table-title {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.table-title > span {
+    padding-left: 5px;
+}
+
+/* テーブルのページングボタン */
+.pagelink {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-right: 5px;
+}
+
+.pagelink > span {
+    margin-right: 5px;
+}
+
+.pagelink:last-child {
+    margin: 0;
+}
+
+/* テーブルに埋め込んだ編集ボタン */
+.list_mod_btn  {
+    table-layout: fixed;
+    width:  20px;
+    height: 20px;
+    border-collapse:  collapse;
+    border-style: none;
+    margin: 0px;
+    padding:  0px;
+    background: url(../admin/images/list_mod.png);
+}
+
+/* テーブルに埋め込んだプラグイン(SaMMAなど)ボタン */
+.plugin_btn {
+    table-layout: fixed;
+    width: 20px;
+    height: 20px;
+    border-collapse: collapse;
+    border-style: none;
+    margin: 0px;
+    padding: 0px;
+}
+
+/* 
+ * メーリングリスト管理画面のスタイル
+*/
+
+/* メーリングリスト一覧画面だけ配置を変える */
+.form-mllist {
+    justify-content: start;
+}
+
+/* メーリングリストのドロップダウン横のボタン */
+.form-mllist-btn {
+    width: 200px;
+    text-align: left;
+}
+
+.form-mllist-btn button {
+    font-size: 12px;
+    padding: 5px;
+    text-align: center;
+}
+
+/* メーリングリスト一覧画面のセレクトボックス */
+.form-addrlist {
+    width: auto;
+    font-size: 14px;
+    font-family: sans-serif;  
+}
+
+/* テキストボックスの横のボタン */
+.form-ml-add {
+    justify-content: start;
+    align-items: center;
+}
+
+/* メールアドレスを一覧表示する枠のサイズ */
+.form-add-mailaddr {
+    width: 50%;
+}
+
+/* ファイル選択ボタンのサイズ */
+.form-add-fromfile {
+    width: 30%;
+}
+
+/* 
+ * ユーザ毎の転送設定画面のスタイル 
+*/
+
+/* 条件,削除のラベルのスタイル */
+.forward-title {
+    width: 95%;
+    margin: 15px 15px 0px 15px;
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid #DDD; 
+    border-bottom: 1px solid #DDD;
+}
+
+.forward-title span {
+    margin: 10px;
+    font-weight: bold;   
+}
+
+/* 転送設定の入力フォームのラジオボタンのスタイル */
+.forward-label {
+    width: 95%;
+    height: auto;
+    padding-top: 2px;
+    padding-right: 10px;
+    display: flex;
+    justify-content: flex-start; 
+}
+
+.forward-label label {
+    width: 100%;
+}
+
+.forward-label .form-text {
+    width: 40%;
+    margin-right: 10px;
+    margin-top: 5px;
+}
+
+/* 転送設定の削除ボタンのスタイル */
+.forward-delete-button {
+    all: unset;
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    top: 20px;
+    right: 15px;
+    background-color: #F0F0F0;
+    border: 1px solid;
+    border-radius: 2px;
+    display: flex;
+    justify-content: center;
+    align-items: center;   
+}
+
+.forward-delete-button:hover {
+    background-color: #E5E5E5;
+}
+
+/* 画面が小さくなった場合のスタイル */
+@media screen and (max-width: 900px)
+{
+    .form-group {
+        justify-content: start;
+        align-items: start;
+        flex-direction: column;
+        margin: 0 0 10px 0;
+    }
+
+    .form-label {
+        width: 100%;
+        text-align: left;
+    }
+
+    table {
         table-layout: fixed;
-        width: 20px;
-        height: 20px;
-        border-collapse: collapse;
-        border-style: none;
-        margin: 0px;
-        padding: 0px;
+    }
+
+    /* メーリングリスト一覧画面のドロップダウンとボタンを横並びにする */
+    .modify-ml {
+        flex-direction: row;
+    }
+
+    /* メーリングリスト一覧画面のセレクトボックス */
+    .form-addrlist {
+        width: 40%;
+    }
+
+    /* メーリングリストのドロップダウン横のボタン */
+    .form-mllist-btn {
+        width: 50%;
+    }
+
+    .forward-label {
+        width: 45%;
+    }
 }
 
+@media screen and (max-width: 600px) {
+    .auth-form {
+        top: 20%;
+        height: 30%;
+    }
+
+    .auth-group {
+        justify-content: start;
+        align-items: start;
+        width: 100%;
+    }
+
+    /* 入力フォームを縦並び */
+    .auth-input {
+        flex-direction: column;
+        justify-content: start;
+        align-items: start;
+        margin: 0 0 10px 0;
+    }
+
+    .auth-input > label {
+        text-align: left;
+    }
+
+    .main {
+        width: 100%;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .left-nav {
+        width: 100%;
+    }
+
+    .left-menu {
+        width: 90%;
+        margin-bottom: 10px;
+        margin-left: 5%;
+    }
+
+    .contents {
+        width: 90%;
+        margin-left: 5%;
+    }
+
+    /* メーリングリスト一覧画面のドロップダウンとボタンを横並びにする */
+    .modify-ml {
+        flex-direction: row;
+    }
+
+    /* メーリングリスト一覧画面のセレクトボックス */
+    .form-addrlist {
+        width: 40%;
+    }
+
+    /* メーリングリストのドロップダウン横のボタン */
+    .form-mllist-btn {
+        width: 50%;
+    }
+}
+
+/* ハンバーガーメニュー */
+.navbar-hum {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.navbar-hum-toggle {
+    display: none;
+}
+
+.navbar-hum-image {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+}
+
+.navbar-hum-icon {
+    display: none;
+    width: 30px;
+    height: auto;
+    cursor: pointer;
+    padding: 10px;
+    background: #fff;
+    color: #fff;
+    position: relative;
+    border-radius: 4px;
+    z-index: 1;
+}
+
+.navbar-hum-icon .navbar-hum-bar {
+    display: block;
+    width: 25px;
+    height: 3px;
+    background: #A0A0A0;
+    margin: 5px auto;
+    transition: 0.3s;
+}
+
+/* メニューのスタイル */
+.nabvar-hum-menu {
+    display: none;
+    width: 100%;
+    z-index: 0;
+}
+
+.nabvar-hum-menu ul {
+    list-style: none;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+}
+
+.nabvar-hum-menu ul li {
+    border: none;
+}
+
+/* チェックボックスがチェックされたとき */
+.navbar-hum-toggle:checked + .navbar-hum-icon .bar:nth-child(1) {
+    transform: rotate(45deg);
+    background: #fff;
+    position: relative;
+    top: 8px;
+}
+
+.navbar-hum-toggle:checked + .navbar-hum-icon .bar:nth-child(2) {
+    opacity: 0;
+}
+
+.navbar-hum-toggle:checked + .navbar-hum-icon .bar:nth-child(3) {
+    transform: rotate(-45deg);
+    background: #fff;
+    position: relative;
+    top: -8px;
+}
+
+.navbar-hum-toggle:checked ~ .nabvar-hum-menu {
+    display: block;
+}
+
+/* 画面サイズによってハンバーガーメニューの表示・非表示を切り替える */
+@media (max-width: 900px) {
+    .nav-link {
+        height: 30px;
+    }
+    .navbar-hum-icon {
+        display: block;
+    }
+
+    .header-nav {
+        display: none;
+    }
+}
+
+@media (min-width: 901px) {
+    .navbar-hum * {
+        display: none;
+    }
+}

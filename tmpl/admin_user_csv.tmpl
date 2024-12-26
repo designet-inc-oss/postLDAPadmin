@@ -1,118 +1,108 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html  class="has-navbar-fixed-buttom" lang="ja">
 <head>
   <title><<TITLE>></title>
   <<JAVASCRIPT>>
   <meta charset="EUC-JP">
-  <link rel="stylesheet" href="../../../../css/bootstrap/css/bootstrap-paper.css">
-  <script src="../../../../js/jquery-3.1.1.min.js"></script>
-  <script src="../../../../js/jquery-ui.min.js"></script>
-  <script src="../../../../css/bootstrap/js/bootstrap.min.js"></script>
   <link rel="stylesheet" href="../../../../css/style.css">
 </head>
 
 <body>
-<header class="">
-  <nav class="navbar navbar-default navmargin">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#gmenu">
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <div class="navbar-brand"></div>
-    </div>
 
-
-    <div id="gmenu" class="collapse navbar-collapse">
-      <ul class="nav navbar-nav navbar-right ">
-<<START_TAB>>
-<li class="<<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')"><span class="glyphicon glyphicon-user" aria-hidden="true"></span><<NAME>></a></li>
-<<END_TAB>>
-<li class=""><a href="#" onClick="dgpSubmit('../../../logout.php')"><span class="glyphicon glyphicon-user" aria-hidden="true"></span>ログアウト</a></li>
+<!-- ヘッダー  -->
+<header>
+  <!-- メニューリンク  -->
+  <nav class="header-nav">
+    <div id="gmenu" class="navbar">
+      <!-- ロゴ画像  -->
+      <div class="logo-image"></div>
+      <ul class="navbar-nav">
+        <<START_TAB>>
+        <li class="nav-item <<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')" class="nav-link"><<NAME>></a></li>
+        <<END_TAB>>
+        <li class="nav-item"><a href="#" onClick="dgpSubmit('../../../logout.php')" class="nav-link">ログアウト</a></li>
       </ul>
     </div>
   </nav>
-  <div class="container-fluid fix-padding">
-  </div>
+  <nav class="navbar-hum">
+    <input type="checkbox" id="menu-toggle" class="navbar-hum-toggle">
+    <div class="navbar-hum-image">
+      <!-- ロゴ画像  -->
+      <div class="logo-image"></div>
+      <label for="menu-toggle" class="navbar-hum-icon">
+        <span class="navbar-hum-bar"></span>
+        <span class="navbar-hum-bar"></span>
+        <span class="navbar-hum-bar"></span>
+      </label>
+    </div>
+    <div class="nabvar-hum-menu">
+      <ul>
+        <<START_TAB>>
+        <li class="nav-item <<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')" class="nav-link"><span class="nav-icon"></span><<NAME>></a></li>
+        <<END_TAB>>
+        <li class="nav-item"><a href="#" onClick="dgpSubmit('../../../logout.php')" class="nav-link"><span class="nav-icon"></span>ログアウト</a></li>
+      </ul>
+    </div>
+  </nav>
 </header>
 
-<div class="container-fluid">
-  <!-- 左グリッド  -->
-  <div class="row">
-    <!-- 左ナビゲーションバー -->
-    <nav class="aside col-sm-2 col-sm-offset-1">
-      <div class="panel panel-default">
-        <ul class="list-group">
-<<START_MENU>>
-<a class="list-group-item  <<ACTIVE>>" href="#"	onClick="dgpSubmit('<<URL>>')"><<NAME>></a>
-<<END_MENU>>
-        </ul>
-      </div>
-    </nav>
+<!-- フッター下のサイドメニューとコンテンツ  -->
+<div class="main">
+  <!-- サイドメニュー  -->
+  <nav class="left-nav">
+    <ul class="left-menu">
+      <<START_MENU>>
+        <li class="left-menu-item <<ACTIVE>>">
+          <a href="#" class="nav-link" onClick="dgpSubmit('<<URL>>')"><<NAME>></a>
+        </li>
+      <<END_MENU>>
+    </ul>
+  </nav>
 
-    <!--ass="table">右グリッド  -->
-    <div class="col-sm-8">
-      <!-- エラーメッセージ -->
-
-      <!-- メインコンテンツ -->
-      <div class="panel panel-primary">
-        <div class="panel-heading">
-          <h3 class="panel-title">CSV一括登録</h3>
-        </div>
-        <div class="ErrorMessage"></div>
-        <div class="row panel-body">
-          <!-- フォーム -->
-          <div class="col-sm-10 col-sm-offset-1">
-            <form class="form-horizontal" method="POST" action="result.php" enctype="multipart/form-data" name="form">
-              <div class="form-group well">
-
-<<MESSAGE>>
-              <table class="table">
-                 <tr>
-                  <td class="key1">動作タイプ</td>
-                  <td class="value">
-                    <input type="radio" name="runtype" value="add">登録
-                    <input type="radio" name="runtype" value="del">削除
-                  </td>
-                 </tr>
-                 <tr>
-                  <td class="key1" rowspan="2">オプション</td>
-                  <td class="value">
-                    <input type="checkbox" name="change" value=ON>既存のデータを上書き（削除の場合は無視されます）
-                  </td>
-                 <tr>
-                  <td class="value">
-                    <input type="checkbox" name="err" value=ON>エラーの場合も処理を継続
-                  </td>
-                 </tr>
-                 <tr>
-                  <td class="key1">アップロードファイル</td>
-                  <td class="value"> 
-                  <input type="file" name="uploadfile" size=50></td>
-                 </tr>
-                 <tr>
-                  <td class="key1">ファイルチェック</td>
-                  <td class="value"><button type="submit" name="fcheck" value="" class="file_check_btn" onClick="resultwindow()">ファイルチェック開始</button></td>
-                 </tr>
-              </table>
-
-              <!-- ボタン -->
-          
-<<SK>>
-                  <button type="submit" name="upload" value="" class="btn btn-primary" onClick="return uploadconfirm('CSV一括処理を開始しますか\nよろしいですか?')">更新</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
+  <!-- メインコンテンツ -->
+  <div class="contents">
+    <div class="contents-title">
+      <span>CSV一括登録</span>
     </div>
+    <!-- フォーム -->
+    <form method="POST" action="result.php" enctype="multipart/form-data" name="form">
+      <div class="ErrorMessage"><<MESSAGE>></div>
+        <div class="form-container">
+          <div class="form-group">
+            <label class="form-label">動作タイプ</label>
+              <div class="form-input form-radio">
+                <label><input type="radio" name="runtype" value="add">登録</label>
+                <label><input type="radio" name="runtype" value="del">削除</label>
+              </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">オプション</label>
+              <div class="form-input form-radio">
+                <label><input type="checkbox" name="change" value=ON>既存のデータを上書き（削除の場合は無視されます）</label>
+                <label><input type="checkbox" name="err" value=ON>エラーの場合も処理を継続</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">アップロードファイル</label>
+            <input class="form-input" type="file" name="uploadfile" size=50>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ファイルチェック</label>
+            <button class="form-input file-check-button" type="submit" name="fcheck" value="" onClick="resultwindow()">ファイルチェック開始</button>
+          </div>
+          <<SK>>
+          <!-- ボタン -->
+          <button type="submit" name="upload" value="" onClick="return uploadconfirm('CSV一括処理を開始しますか\nよろしいですか?')">更新</button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
-<footer class="footer nav navbar-default">
-    <nav class="pull-right">
-      <div class="navbar-brand"></div>
-    </nav>
+
+<footer>
+  <div class="logo-footer">
+    <div class="logo-image"></div>
+  </div>
 </footer>
 
 <form method="post" name="common">

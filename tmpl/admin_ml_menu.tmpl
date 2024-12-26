@@ -4,63 +4,68 @@
   <title><<TITLE>></title>
   <<JAVASCRIPT>>
   <meta charset="EUC-JP">
-  <link rel="stylesheet" href="../../../css/bootstrap/css/bootstrap-paper.css">
-  <script src="../../../js/jquery-3.1.1.min.js"></script>
-  <script src="../../../js/jquery-ui.min.js"></script>
-  <script src="../../../css/bootstrap/js/bootstrap.min.js"></script>
   <link rel="stylesheet" href="../../../css/style.css">
 </head>
 
 <body>
-<header class="">
-  <nav class="navbar navbar-default navmargin">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#gmenu">
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <div class="navbar-brand"></div>
-    </div>
 
-
-    <div id="gmenu" class="collapse navbar-collapse">
-      <ul class="nav navbar-nav navbar-right ">
-<<START_TAB>>
-<li class="<<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')"><span class="glyphicon glyphicon-user" aria-hidden="true"></span><<NAME>></a></li>
-<<END_TAB>>
-<li class=""><a href="#" onClick="dgpSubmit('../../logout.php')"><span class="glyphicon glyphicon-user" aria-hidden="true"></span>ログアウト</a></li>
+<!-- ヘッダー  -->
+<header>
+  <!-- メニューリンク  -->
+  <nav class="header-nav">
+    <div id="gmenu" class="navbar">
+      <!-- ロゴ画像  -->
+      <div class="logo-image"></div>
+      <ul class="navbar-nav">
+        <<START_TAB>>
+        <li class="nav-item <<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')" class="nav-link"><<NAME>></a></li>
+        <<END_TAB>>
+        <li class="nav-item"><a href="#" onClick="dgpSubmit('../../logout.php')" class="nav-link">ログアウト</a></li>
       </ul>
     </div>
   </nav>
-  <div class="container-fluid fix-padding">
-  </div>
+
+  <nav class="navbar-hum">
+    <input type="checkbox" id="menu-toggle" class="navbar-hum-toggle">
+    <div class="navbar-hum-image">
+      <!-- ロゴ画像  -->
+      <div class="logo-image"></div>
+      <label for="menu-toggle" class="navbar-hum-icon">
+        <span class="navbar-hum-bar"></span>
+        <span class="navbar-hum-bar"></span>
+        <span class="navbar-hum-bar"></span>
+      </label>
+    </div>
+    <div class="nabvar-hum-menu">
+      <ul>
+        <<START_TAB>>
+        <li class="nav-item <<ACTIVE>>"><a href="#" onClick="dgpSubmit('<<URL>>')" class="nav-link"><span class="nav-icon"></span><<NAME>></a></li>
+        <<END_TAB>>
+        <li class="nav-item"><a href="#" onClick="dgpSubmit('../../logout.php')" class="nav-link"><span class="nav-icon"></span>ログアウト</a></li>
+      </ul>
+    </div>
+  </nav>
 </header>
 
-<div class="container-fluid">
-  <!-- 左グリッド  -->
-  <div class="row">
-    <!-- 左ナビゲーションバー -->
-    <nav class="aside col-sm-2 col-sm-offset-1">
-      <div class="panel panel-default">
-        <ul class="list-group">
-<<START_MENU>>
-<a class="list-group-item  <<ACTIVE>>" href="#"	onClick="dgpSubmit('<<URL>>')"><<NAME>></a>
-<<END_MENU>>
-        </ul>
-      </div>
-    </nav>
-
-    <!-- 右グリッド  -->
-    <div class="col-sm-8">
-      <div class="message"><<MESSAGE>></div>
-    </div>
-  </div>
+<!-- フッター下のサイドメニューとコンテンツ  -->
+<div class="main">
+  <!-- サイドメニュー  -->
+  <nav class="left-nav">
+    <ul class="left-menu">
+      <<START_MENU>>
+        <li class="left-menu-item <<ACTIVE>>">
+          <a href="#" class="nav-link" onClick="dgpSubmit('<<URL>>')"><<NAME>></a>
+        </li>
+      <<END_MENU>>
+    </ul>
+  </nav>
+  <div class="InfoMessage"><<MESSAGE>></div>
 </div>
-<footer class="footer nav navbar-default">
-    <nav class="pull-right">
-      <div class="navbar-brand"></div>
-    </nav>
+
+<footer>
+  <div class="logo-footer">
+    <div class="logo-image"></div>
+  </div>
 </footer>
 
 <form method="post" name="common">
